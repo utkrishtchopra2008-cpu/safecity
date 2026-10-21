@@ -467,6 +467,8 @@ Fields:
 
 - name
 - file
+- Optional `context_area_label`: coarse, approved public area label; never a private address or personal location.
+- Optional `context_retrieval_enabled`: boolean, default `false`; only enabled after the area and source policy are approved.
 
 The endpoint must validate the file size, supported format, actual content, and decoding feasibility where practical.
 
@@ -537,6 +539,8 @@ Return a bounded, paginated collection. Each item may include `id`, `topic`, `ti
 | GET | /api/v1/jobs/{job_id} | Inspect processing-job status | Authenticated and authorized |
 | GET | /api/v1/system/status | Inspect source and processing health | Authenticated; details restricted by role |
 | GET | /health/live | Application liveness check | Internal/platform |
+
+The existing job endpoint also returns the state of `context_enrichment` jobs. The public API must not expose TinyFish credentials, raw provider payloads, or internal diagnostic detail.
 | GET | /health/ready | Readiness check for required dependencies | Internal/platform |
 
 #### Job states
@@ -610,7 +614,7 @@ Supported metrics include:
 
 Do not report review time as available merely because reviews exist; the current database schema does not itself define a reliable review-duration measurement.
 
-Metrics calculated from a labeled evaluation must be identified as evaluation results. Operational metrics based on human-reviewed data must use a documented methodology and must not be silently substituted for benchmark results.
+Metrics calculated from a labeled evaluation must be identified as evaluation results. Operational metrics based on human-reviewed data must use a documented methodology and must not be silently substituted for benchmark results. TinyFish public-context items are not detector predictions or ground-truth labels and must not enter precision, recall, false-alert-rate, or detection-delay calculations by default.
 
 Undefined values must be null with an appropriate availability status, never a misleading zero.
 
