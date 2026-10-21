@@ -94,6 +94,8 @@ erDiagram
     SOURCES o|--o{ PROCESSING_JOBS : processes
 
     PROCESSING_JOBS o|--o{ INCIDENTS : produces
+    PROCESSING_JOBS ||--o{ EXTERNAL_CONTEXT_ITEMS : produces
+    SOURCES ||--o{ EXTERNAL_CONTEXT_ITEMS : scoped_to
     PROCESSING_JOBS ||--o| EVALUATION_RUNS : executes
 
     INCIDENTS ||--o{ INCIDENT_EVIDENCE : references
@@ -167,6 +169,8 @@ Represents a configured source that can produce candidate detections. For the MV
 | name | VARCHAR(160) | No | Operator-facing source name |
 | source_type | VARCHAR(32) | No | CHECK: uploaded_clip, simulated |
 | status | VARCHAR(32) | No | CHECK: ready, processing, unavailable, failed, disabled |
+| context_area_label | VARCHAR(160) | Yes | Coarse, approved public area label used only when context retrieval is enabled; never store precise personal locations |
+| context_retrieval_enabled | BOOLEAN | No | Default FALSE; enables best-effort public context retrieval for this source |
 | configuration | JSONB | No | Default empty object; non-secret source settings only |
 | created_by | UUID | Yes | FK to users.id |
 | last_processed_at | TIMESTAMPTZ | Yes | Most recent successful processing time |
@@ -212,7 +216,7 @@ Tracks long-running source-processing and evaluation jobs. PostgreSQL is the MVP
 | Column | Type | Nullable | Rules / purpose |
 |---|---|---|---|
 | id | UUID | No | Primary key |
-| job_type | VARCHAR(32) | No | CHECK: source_processing, evaluation |
+| job_type | VARCHAR(32) | No | CHECK: source_processing, evaluation, context_enrichment |
 | status | VARCHAR(24) | No | CHECK: pending, running, completed, failed |
 | source_id | UUID | Yes | FK to sources.id for source-processing jobs |
 | dataset_id | UUID | Yes | FK to evaluation_datasets.id for evaluation jobs |
@@ -237,7 +241,9 @@ Tracks long-running source-processing and evaluation jobs. PostgreSQL is the MVP
 - CHECK result_metadata is a JSON object.
 - CHECK job target consistency:
   - source_processing requires source_id and forbids dataset_id;
-  - evaluation requires dataset_id and forbids source_id.
+  - evaluation requires dataset_id and forbids source_id;
+  - context_enrichment requires source_id and forbids dataset_id.
+- A context_enrichment job may be created only when the source is authorized, context_retrieval_enabled is TRUE, and context_area_label is present. This cross-record rule is enforced in the service and covered by tests.
 - A completed job must have finished_at.
 - A worker must not mark a job completed until required output rows are committed.
 - Do not store raw exception dumps, session data, or sensitive media metadata in error_summary or result_metadata.
@@ -490,6 +496,40 @@ Stores calculated metrics for an evaluation run. Each metric result includes con
 
 ---
 
+### 4.15 external_context_items
+
+Stores bounded, attributed public-web context retrieved for an approved source area. It does not store video bytes or act as a detector prediction. Keep excerpts short and source-grounded; do not store full page dumps by default.
+
+| Column | Type | Nullable | Rules / purpose |
+|---|---|---|---|
+| id | UUID | No | Primary key |
+| source_id | UUID | No | FK to sources.id |
+| processing_job_id | UUID | No | FK to processing_jobs.id; must reference a context_enrichment job |
+| topic | VARCHAR(80) | No | CHECK: weather_advisory, transport_disruption, public_notice, public_event, emergency_advisory, other |
+| title | VARCHAR(400) | No | Source page or notice title |
+| publisher | VARCHAR(200) | Yes | Publisher or source name where available |
+| source_domain | VARCHAR(255) | No | Normalized public host for display/filtering |
+| source_url | TEXT | No | Validated HTTP(S) URL to original/final public page; never a private/internal URL |
+| summary | TEXT | No | Bounded excerpt or concise source-grounded summary; enforce length in application validation |
+| published_at | TIMESTAMPTZ | Yes | Publication/update time explicitly supplied by the source or provider; otherwise NULL |
+| retrieved_at | TIMESTAMPTZ | No | When SafeCity AI retrieved the page/result |
+| stale_after | TIMESTAMPTZ | Yes | Freshness cutoff calculated from the configured policy; NULL means age/freshness cannot be established |
+| dedupe_key | CHAR(64) | No | Stable SHA-256 key for the normalized source identity, computed by the application |
+| provider_metadata | JSONB | No | Default empty object; allowlisted, non-sensitive metadata only; never secrets or raw response dumps |
+| created_at | TIMESTAMPTZ | No | Default current timestamp |
+
+**Constraints**
+
+- Foreign keys: source_id references sources.id and processing_job_id references processing_jobs.id with restrictive deletion behavior.
+- Unique: (source_id, dedupe_key) to prevent repeated retrievals from creating duplicate context items; update an item only through a documented refresh policy that preserves relevant provenance.
+- CHECK provider_metadata is a JSON object.
+- The referenced job must have job_type = context_enrichment and a compatible source_id; validate in application logic and integration tests.
+- Validate source_url scheme, host, length, and allowed-domain policy before persistence. Reject localhost, private/link-local/reserved IPs, cloud metadata endpoints, file URLs, embedded credentials, and unsupported schemes.
+- Keep summary length bounded. Do not store complete page content, session state, browser storage, cookies, or user credentials unless a separately approved need requires a documented change.
+- Freshness status is derived from stale_after and retrieval metadata; distinguish stale from unknown rather than silently refreshing the timestamp.
+
+---
+
 ## 5. Relationships and Delete Rules
 
 ### 5.1 Core Relationships
@@ -497,12 +537,13 @@ Stores calculated metrics for an evaluation run. Each metric result includes con
 - One user may have multiple sessions.
 - One user may create multiple sources, jobs, datasets, or reviews.
 - One source may produce many incidents and contain multiple evidence objects.
+- One source may have many context-enrichment jobs and attributed external_context_items.
 - One incident may reference multiple evidence objects via incident_evidence.
 - One incident may have multiple reliability assessments and reviews.
 - One dataset version may contain many evaluation assets and reference events.
 - One dataset version may be evaluated by multiple runs.
 - One run may produce multiple metric results.
-- One processing job may produce many incidents or be linked to one evaluation run.
+- One processing job may produce many incidents, one evaluation run, or multiple public context items according to its job_type.
 
 ### 5.2 Deletion Policy
 
@@ -712,6 +753,16 @@ The implementation must support a documented retention procedure without silentl
 
 ---
 
+### 9.6 Public Context Data
+
+- Store only the fields needed to display and verify a public context item; preserve its public source URL and retrieval timestamp.
+- Context items must be clearly identified as external public information, not model predictions or human-confirmed facts.
+- Do not send CCTV clips, frames, personal data, credentials, or non-public URLs to TinyFish; the database should never need to persist such data for this integration.
+- Define a retention period for fetched excerpts before enabling the feature in real operational deployments. Until approved, keep development/test excerpts minimal and use authorized public sources only.
+- Do not use public context items as ground truth for model evaluation unless a separately approved, documented methodology establishes suitability; by default, exclude them from detector precision/recall calculations.
+
+---
+
 ## 10. Migration Strategy
 
 ### 10.1 Tooling
@@ -886,6 +937,13 @@ The following invariants must hold throughout the application's life:
 
 ## 14. Database Acceptance Criteria
 
+Additional TinyFish acceptance checks:
+
+- [ ] Context-enrichment jobs require an enabled source and approved coarse area label.
+- [ ] External context items retain source URL, domain, retrieval time, source publication time when available, and freshness cutoff.
+- [ ] Repeated retrievals are deduplicated per source.
+- [ ] Context records cannot be used to update detector results or human review status.
+
 The database implementation is complete when:
 
 - [ ] All required entities and relationships exist.
@@ -909,7 +967,7 @@ The database implementation is complete when:
 
 ## 15. Final Database Definition
 
-SafeCity AI uses PostgreSQL as the authoritative store for application identities, sources, incidents, evidence metadata, reliability assessments, reviews, processing jobs, evaluation datasets, annotations, and metric results.
+SafeCity AI uses PostgreSQL as the authoritative store for application identities, sources, incidents, evidence metadata, reliability assessments, reviews, processing jobs, external public context items, evaluation datasets, annotations, and metric results.
 
 Media bytes remain in private storage. Background processing is represented explicitly through jobs. Evaluation results retain their dataset and detector context. Human review does not overwrite the original model prediction.
 
