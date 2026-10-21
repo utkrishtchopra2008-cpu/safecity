@@ -773,6 +773,7 @@ The MVP does not include emergency-service dispatch, external messaging or notif
 - Persistence of incident and review records.
 - Reliability metric calculation on a labeled dataset.
 - Processing status and error visibility.
+- Public context retrieval through TinyFish Search/Fetch for sources with an approved area and context enabled, including provenance, freshness states, and graceful degradation.
 - Appropriate loading, empty, and error states.
 - A reproducible end-to-end demonstration.
 
@@ -782,7 +783,6 @@ The MVP does not include emergency-service dispatch, external messaging or notif
 - Review notes and review history.
 - Comparison of detector configurations.
 - More detailed source-management functionality.
-- Source-level public context enrichment using TinyFish Search and Fetch, with provenance, freshness states, and graceful degradation.
 
 ### 14.3 Out of Scope
 
@@ -815,6 +815,7 @@ The MVP will be considered successful when:
 8. The end-to-end demonstration works without falsely implying a live-camera connection.
 9. The evaluation methodology documents the dataset, matching rules, and relevant limitations.
 10. Any claimed reduction in review workload or false alerts is supported by a baseline comparison.
+11. Public context is attributed to its source, displays retrieval/publication timing when available, and cannot create, suppress, or reclassify a video incident.
 
 **No fixed percentage improvement is assumed.** A target reduction in false alerts or review time must be approved after the baseline, dataset, and evaluation methodology are established.
 
