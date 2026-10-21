@@ -23,13 +23,6 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund
-      - name: TEMP export frontend lockfile
-        working-directory: frontend
-        run: |
-          echo "LOCKFILE_NPM_START"
-          gzip -c package-lock.json | base64 -w 0
-          echo
-          echo "LOCKFILE_NPM_END"
       - name: Lint
         working-directory: frontend
         run: npm run lint
@@ -63,13 +56,6 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: uv sync --group dev
-      - name: TEMP export backend lockfile
-        working-directory: backend
-        run: |
-          echo "LOCKFILE_UV_START"
-          gzip -c uv.lock | base64 -w 0
-          echo
-          echo "LOCKFILE_UV_END"
       - name: Lint
         working-directory: backend
         run: uv run ruff check app tests migrations
