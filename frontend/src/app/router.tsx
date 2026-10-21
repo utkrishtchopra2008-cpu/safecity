@@ -2,14 +2,13 @@ import { createBrowserRouter } from 'react-router-dom';
 
 import { AppShell } from '../components/AppShell';
 import { NotFoundPage } from '../pages/NotFoundPage';
-import { SetupStatusPage } from '../pages/SetupStatusPage';
+import { SublevelStudioLandingPage } from '../pages/SublevelStudioLandingPage';
 
 export const router = createBrowserRouter([
+  { path: '/', element: <SublevelStudioLandingPage /> },
   {
+    path: '*',
     element: <AppShell />,
-    children: [
-      { index: true, element: <SetupStatusPage /> },
-      { path: '*', element: <NotFoundPage /> },
-    ],
+    children: [{ index: true, element: <NotFoundPage /> }],
   },
 ]);
