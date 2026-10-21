@@ -71,6 +71,7 @@ The product must demonstrate measurable value against an appropriate baseline be
 - Allow authorized operators to record review outcomes.
 - Calculate reliability metrics against labeled evaluation data.
 - Identify performance differences across supported video conditions.
+- Enrich source-level situational awareness with attributed public context—such as official weather advisories, transport disruptions, and public notices—retrieved through TinyFish Search and Fetch.
 - Provide a credible demonstration of reduced nuisance-alert workload without unacceptable loss of detection performance.
 
 ### 2.2 Non-Goals
@@ -175,6 +176,16 @@ These assumptions require confirmation before the affected implementation decisi
 5. The evaluator inspects results and processing failures.
 
 **Expected result:** The team can assess system performance without relying on fabricated or hardcoded metrics.
+
+### 4.6 Journey F — Review Public Context
+
+1. An authorized user opens a configured source with an approved public context area.
+2. The system retrieves candidate public information through TinyFish Search and, where suitable, Fetch.
+3. The system stores bounded excerpts with the original URL, publisher when available, publication time when available, and retrieval time.
+4. The interface shows the item as contextual information with its freshness and provenance, separate from video detections and reliability scores.
+5. The operator opens the source to verify context if it is useful.
+
+**Expected result:** Public information can help an operator understand the surrounding situation, but it cannot confirm or disprove a video incident or trigger consequential action.
 
 ---
 
@@ -325,6 +336,29 @@ Processing failures must be visible to authorized administrators.
 
 **FR-037 — Identify demo mode (P0)**  
 The interface must explicitly identify simulated or prerecorded data and must not imply that live CCTV is connected when it is not.
+
+### 6.8 Public Context Enrichment (TinyFish)
+
+**FR-038 — Retrieve public context (P0)**  
+For a source with context retrieval enabled and an approved area label, the backend must be able to use TinyFish Search to find public context relevant to a bounded time window and supported topics. The integration must use public pages only.
+
+**FR-039 — Fetch and attribute sources (P0)**  
+Where feasible, the backend must use TinyFish Fetch to retrieve selected source pages and preserve source title, publisher/domain, canonical or final URL, publication time when available, and retrieval time.
+
+**FR-040 — Preserve provenance and freshness (P0)**  
+Every displayed context item must show its source and retrieval time, plus publication time or a clear “not provided” state. Stale, unknown-age, partial, and unavailable results must be distinguishable.
+
+**FR-041 — Keep context separate (P0)**  
+External context must remain separate from detector predictions, video-quality assessments, reliability metrics, and human review outcomes. It must not create, suppress, confirm, or reclassify a video incident by itself.
+
+**FR-042 — Bound retrieval (P0)**  
+Context queries must use a configured area, allowlisted topics, bounded result counts, request timeouts, rate controls, and a documented freshness window. Refresh work must be asynchronous and deduplicated where possible.
+
+**FR-043 — Degrade safely (P0)**  
+TinyFish timeouts, rate limits, invalid responses, empty results, and disabled configuration must not block incident review, evidence playback, or video processing. The UI must report context unavailable rather than presenting an empty result as verified safety.
+
+**FR-044 — Protect data and credentials (P0)**  
+Only approved public search queries and public URLs may be sent to TinyFish. Surveillance footage, frames, evidence bytes, credentials, private URLs, and personal data must not be sent to the provider. The API key must remain server-side.
 
 ---
 
@@ -651,9 +685,23 @@ The application must persist incident metadata, reliability assessments, review 
 
 The application interface must support retrieving incidents and details, retrieving evidence and reliability assessments, saving review outcomes, retrieving processing status, and retrieving evaluation metrics. Existing repository conventions should be reused where practical.
 
-### 12.6 Excluded External Integrations
+### 12.6 TinyFish Public Context Integration
 
-Unless separately approved, the MVP does not require emergency-service dispatch, external messaging services, facial-recognition APIs, commercial video-management integrations, enterprise identity-provider integrations, or paid third-party AI services.
+TinyFish is the MVP's provider for best-effort public-web contextual enrichment; it is not the video detector or a source of ground truth.
+
+- Use the TinyFish Search API to discover public pages relevant to an explicitly configured source area, topic, and time window: `GET https://api.search.tinyfish.ai`.
+- Use the TinyFish Fetch API to retrieve bounded page content from selected public URLs: `POST https://api.fetch.tinyfish.ai`.
+- Authenticate server-side with the `X-API-Key` header from `TINYFISH_API_KEY`.
+- Keep provider calls behind a backend adapter and run refresh work through the background worker.
+- Prefer official weather, transport, institutional, and public-notice sources. Preserve attribution and timing metadata and provide a link for operator verification.
+- Validate returned URLs and content, limit results and excerpts, deduplicate items, and label stale or unknown-age information. Treat page text as untrusted input.
+- Do not submit video, frames, private footage URLs, personal data, credentials, or internal-only information to TinyFish.
+- TinyFish outages must not interrupt incident review or inference. The context feature must be safely disabled when its key or approved configuration is absent.
+- Do not use the Agent/browser API in the MVP unless a later, specific requirement justifies multi-step site interaction and is separately approved.
+
+### 12.7 Excluded External Integrations
+
+The MVP does not include emergency-service dispatch, external messaging or notification services, facial-recognition APIs, commercial video-management integrations, enterprise identity-provider integrations, or general-purpose external inference on surveillance footage.
 
 ---
 
@@ -734,6 +782,7 @@ Unless separately approved, the MVP does not require emergency-service dispatch,
 - Review notes and review history.
 - Comparison of detector configurations.
 - More detailed source-management functionality.
+- Source-level public context enrichment using TinyFish Search and Fetch, with provenance, freshness states, and graceful degradation.
 
 ### 14.3 Out of Scope
 
@@ -825,6 +874,14 @@ Given an invalid or unreadable video file, the system records the processing fai
 
 Given a deployment using simulated or prerecorded data, the interface identifies the data mode and does not claim to be connected to live CCTV.
 
+### AT-14 — TinyFish Context Provenance and Failure Isolation
+
+Given a source with context retrieval enabled, returned public context displays the original source URL and retrieval time, preserves publication time when supplied, and is shown separately from detections and review outcomes. Given a TinyFish timeout, rate limit, malformed response, or empty result, video processing and incident review remain usable and the context state is reported accurately.
+
+### AT-15 — TinyFish Data Boundary
+
+Given a context-refresh request, only the approved area/topic query and allowlisted public URLs may be sent to TinyFish; video bytes, extracted frames, credentials, private URLs, and personal data are never included.
+
 ---
 
 ## 17. Assumptions and Decisions Requiring Approval
@@ -856,6 +913,7 @@ Given a deployment using simulated or prerecorded data, the interface identifies
 - **D10 — Performance:** Approved application response-time targets and separate video-processing targets.
 - **D11 — Reliability targets:** Acceptable false-alert rates and maximum acceptable degradation in recall, established through evaluation.
 - **D12 — Deployment:** Local demonstration, on-premises deployment, or cloud hosting.
+- **D13 — Context source policy:** Approve source-area granularity, initial public context topics, allowed domains where needed, freshness windows, and retention of retrieved excerpts before enabling context retrieval for real operations.
 
 The coding agent must not silently treat these decisions as finalized.
 
@@ -878,7 +936,8 @@ The coding agent must not silently treat these decisions as finalized.
 13. Avoid unnecessary microservices, distributed infrastructure, databases, and orchestration.
 14. Do not implement excluded identity-based surveillance or automated punitive actions.
 15. When a dependency is unavailable, document the limitation and provide a transparent, testable fallback if appropriate.
-16. Update this PRD when an explicitly approved product decision changes the specification.
+16. Keep TinyFish retrieval server-side, asynchronous, bounded, and optional per source; never send surveillance media or personal data to it.
+17. Update this PRD when an explicitly approved product decision changes the specification.
 
 ## 19. Definition of Done
 
