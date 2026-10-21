@@ -28,7 +28,17 @@ jobs:
         run: npm run lint
       - name: Check formatting
         working-directory: frontend
-        run: npm run format:check
+        run: |
+          if npm run format:check; then
+            exit 0
+          fi
+          npx prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --write index.html src/api/client.test.ts src/api/client.ts src/components/AppShell.tsx src/pages/NotFoundPage.tsx src/pages/SetupStatusPage.tsx src/styles/tokens.css
+          echo "=== TEMPORARY PRETTIER SOURCE DUMP ==="
+          for file in index.html src/api/client.test.ts src/api/client.ts src/components/AppShell.tsx src/pages/NotFoundPage.tsx src/pages/SetupStatusPage.tsx src/styles/tokens.css; do
+            echo "===== $file ====="
+            cat "$file"
+          done
+          exit 1
       - name: Typecheck
         working-directory: frontend
         run: npm run typecheck
@@ -56,10 +66,10 @@ jobs:
         run: uv sync --group dev
       - name: Lint
         working-directory: backend
-        run: uv ruff check app tests migrations
+        run: uv run ruff check app tests migrations
       - name: Check formatting
         working-directory: backend
-        run: uv ruff format --check app tests migrations
+        run: uv run ruff format --check app tests migrations
       - name: Typecheck
         working-directory: backend
         run: uv run mypy app
