@@ -94,7 +94,7 @@ TinyFish, when configured, is a server-side provider for retrieving contextual i
 
 ## 11. TinyFish Integration Rules
 
-- Use the official, currently documented TinyFish API contract and verify it before relying on request or response fields. Prefer Search for discovery and Fetch for extracting approved public source pages. Use Agent/browser automation only for an approved need that cannot be handled by Search/Fetch.
+- Use the official REST endpoints from the backend/worker only: Search `GET https://api.search.tinyfish.ai` and Fetch `POST https://api.fetch.tinyfish.ai`; authenticate with `X-API-Key` sourced from server-side `TINYFISH_API_KEY`. Verify the exact contract at `https://docs.tinyfish.ai/search-api/reference` and `https://docs.tinyfish.ai/fetch-api/reference` before implementation. TinyFish Search's `location` field is a country code, coarse area belongs in the query text, and its search-type parameter is `domain_type`. Fetch allows up to 10 URLs per request; impose a stricter SafeCity limit. Prefer Search for discovery and Fetch for extracting approved public source pages. Use Agent/browser automation only for an approved need that cannot be handled by Search/Fetch.
 - Put all provider-specific behavior behind a typed adapter with configuration, timeouts, bounded retries, rate/budget controls, and a mockable interface.
 - Run potentially slow retrieval in the existing background-job architecture, not inside ordinary dashboard or incident-detail HTTP requests.
 - Use a domain allowlist for contextual source retrieval. Prefer primary official sources (for example, transport operators, weather authorities, and institutional public notices) and keep the original source URL and timestamp for attribution.
