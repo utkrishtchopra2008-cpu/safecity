@@ -1126,7 +1126,7 @@ TinyFish is not used for video inference and must never receive media or persona
 
 Use the documented TinyFish REST APIs through the backend HTTP client:
 
-- Search: `GET https://api.search.tinyfish.ai` with `query` and, where useful, `location`, `language`, `include_domains`, `exclude_domains`, `search_type`, and date/freshness filters supported by the current provider contract.
+- Search: `GET https://api.search.tinyfish.ai` with `query` and, where useful, `language`, `include_domains`, `exclude_domains`, `domain_type`, `recency_minutes`, `after_date`, and `before_date` as supported by the current provider contract. TinyFish's `location` parameter is a country code, not a precise local address; include the approved coarse area in the query text.
 - Fetch: `POST https://api.fetch.tinyfish.ai` with a bounded `urls` list and `format: "markdown"` for clean, readable source content. Fetch accepts at most 10 URLs per request according to the current reference; SafeCity should use a smaller configured limit for its MVP.
 - Both services authenticate with the server-side `X-API-Key` header using `TINYFISH_API_KEY`.
 
