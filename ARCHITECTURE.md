@@ -1583,6 +1583,7 @@ The following is the recommended logical structure. Adapt it to the existing rep
     │   │   │       ├── reliability.py
     │   │   │       ├── evaluations.py
     │   │   │       ├── sources.py
+    │   │   │       ├── context.py
     │   │   │       └── system.py
     │   │   ├── core/
     │   │   │   ├── config.py
@@ -1596,6 +1597,8 @@ The following is the recommended logical structure. Adapt it to the existing rep
     │   │   ├── services/
     │   │   ├── adapters/
     │   │   │   ├── detectors/
+    │   │   │   ├── integrations/
+    │   │   │   │   └── tinyfish.py
     │   │   │   └── storage/
     │   │   ├── processing/
     │   │   │   ├── jobs.py
@@ -1770,6 +1773,7 @@ The initial implementation should include:
 - Session-based authentication.
 - An evidence-review workflow.
 - Reliability and evaluation modules.
+- A typed TinyFish Search/Fetch adapter for source-attributed public context, isolated from the detector pipeline.
 - Structured logging and essential health checks.
 - Automated tests for critical workflows.
 
