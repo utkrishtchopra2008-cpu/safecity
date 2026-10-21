@@ -37,7 +37,7 @@ The MVP uses:
 - Private filesystem or object storage for media.
 - One configured detection pipeline or a clearly labeled simulated detector.
 
-The API does not require external AI-provider integrations, emergency-service dispatch, facial-recognition services, enterprise identity providers, or commercial video-management integrations.
+The MVP includes an optional-per-source, feature-flagged TinyFish Search/Fetch integration for public-web context retrieval. TinyFish is not used for video inference and must never receive surveillance media, personal data, credentials, or private URLs. The API does not include emergency-service dispatch, facial-recognition services, enterprise identity providers, or commercial video-management integrations.
 
 ### 1.2 Normative Requirements
 
@@ -437,7 +437,9 @@ The MVP supports an uploaded clip, a simulated source, or both, according to the
 | GET | /api/v1/sources/{source_id} | Retrieve source details | Authenticated and authorized |
 | POST | /api/v1/sources | Register an approved simulated source | Technical administrator |
 | POST | /api/v1/sources/upload | Upload a prerecorded clip and create source/evidence/job records | Technical administrator |
-| POST | /api/v1/sources/{source_id}/process | Request processing or an approved reprocessing operation | Technical administrator |
+| POST | /api/v1/sources/{source_id}/process | Request video processing or an approved reprocessing operation | Technical administrator |
+| GET | /api/v1/sources/{source_id}/context | List public context items linked to the source, with freshness metadata | Authenticated and authorized |
+| POST | /api/v1/sources/{source_id}/context-refresh | Enqueue a bounded TinyFish public-context refresh | Supervisor or technical administrator |
 
 Upload and processing endpoints should be implemented only for the source modes selected for the MVP.
 
@@ -450,6 +452,8 @@ Fields:
 - name
 - source_type, fixed to simulated
 - Optional non-sensitive configuration supported by the chosen simulator
+- Optional `context_area_label`: coarse, approved public area used to search for relevant public context; do not use a private address or personal location.
+- Optional `context_retrieval_enabled`: boolean, default `false`; may be enabled only when the area and source policy have been approved.
 
 The server must not accept arbitrary code or arbitrary executable paths in the configuration.
 
@@ -490,6 +494,8 @@ Return:
 - last_processed_at, if available
 - created_at
 - Safe processing status information
+- `context_area_label`, if configured
+- `context_retrieval_enabled` and a safe context-feature status
 
 Never return credentials or private storage paths.
 
@@ -498,6 +504,29 @@ Never return credentials or private storage paths.
 Reprocessing must use already registered, authorized source content. It must not create duplicate incident records where the same source events are recognized.
 
 A reprocessing endpoint is not required for the initial demonstration if no reprocessing control is implemented.
+
+#### Context refresh request
+
+The caller must be authorized for the source, and the source must have `context_retrieval_enabled = true` plus an approved `context_area_label`. The request must not accept arbitrary URLs, raw page HTML, evidence files, personal data, or provider credentials.
+
+Request fields may include:
+
+- `topics`: optional subset of `weather_advisory`, `transport_disruption`, `public_notice`, `public_event`, `emergency_advisory`, and `other`.
+- `time_window_hours`: integer from 1 to 168, default 24.
+
+The backend derives the search query from the stored approved area and allowlisted topics, enforces result limits/cooldowns, and creates a `context_enrichment` job. Return 202 Accepted with `source_id`, `job_id`, and `status`. The job result is retrieved through the existing job and context-list endpoints; do not hold the HTTP request open while TinyFish executes.
+
+#### Context list response
+
+Return a bounded, paginated collection. Each item may include `id`, `topic`, `title`, `publisher`, `source_domain`, `source_url`, `summary`, `published_at`, `retrieved_at`, `freshness_status` (`current`, `stale`, `unknown`), and a `processing_job_id` or other safe provenance reference. Never expose the raw provider response, unbounded page content, or API key. An unknown publication time must remain unknown.
+
+#### Context retrieval semantics
+
+- A successful refresh with no matching results is different from a failed refresh.
+- A failed provider call must be visible as a failed context job and must not block video processing or incident review.
+- Context items are attributed candidate information, not verified incident facts.
+- Context does not change incident status, detector score, reliability metrics, or review outcome.
+- Context list and refresh endpoints require resource-level authorization and bounded filtering/pagination.
 
 ---
 
@@ -824,8 +853,6 @@ The frontend distinguishes a genuinely empty dataset from a filter that produces
 
 ### 8.1 MVP Integration Policy
 
-The MVP does not require an external HTTP API provider.
-
 The primary integrations are internal:
 
 - FastAPI to PostgreSQL.
@@ -833,9 +860,33 @@ The primary integrations are internal:
 - Worker to the selected local detector/model implementation.
 - Worker to the dataset and annotation storage used for evaluation.
 
-The API contract must not imply that a commercial CCTV platform or external AI service is connected unless that integration has been implemented and configured.
+TinyFish is a separate, feature-flagged public-context integration. It is never part of the video-inference path and can be unavailable without degrading the core incident workflow.
 
-### 8.2 Detector Integration
+### 8.2 TinyFish Search and Fetch Integration
+
+Use the official TinyFish REST endpoints from the backend/worker only:
+
+- Search: `GET https://api.search.tinyfish.ai` with `X-API-Key` and bounded query parameters.
+- Fetch: `POST https://api.fetch.tinyfish.ai` with `X-API-Key`, `Content-Type: application/json`, and a bounded `urls` array; request Markdown format for the MVP.
+
+Search should be used to discover candidate public pages. Fetch should read selected source URLs before the item is presented as source-grounded context where feasible. Use official, relevant domains when configured; do not trust a URL just because Search returned it. Fetch requests must stay within the provider's current request limit and the lower SafeCity-configured limit. Check the current official documentation for the exact provider response schema before implementation:
+
+- https://docs.tinyfish.ai/search-api/reference
+- https://docs.tinyfish.ai/fetch-api/reference
+
+#### Security and reliability requirements
+
+- Read `TINYFISH_API_KEY` only from backend configuration and send it in the `X-API-Key` header. Never expose it through the frontend, response bodies, logs, or error traces.
+- Never send CCTV footage, frames, evidence bytes, personal data, credentials, private URLs, or internal institutional information to TinyFish.
+- Validate all returned/fetched URLs using an allowlist, `http`/`https` only, no embedded credentials, and no private, loopback, link-local, or metadata-service destinations. Do not permit callers to supply arbitrary target URLs.
+- Set timeouts, response-size/result limits, rate-aware backoff and refresh cooldowns. Bound query scope by source area, allowed topics, and time window.
+- Treat retrieved text as untrusted data and ignore any instructions it contains. Do not execute code, perform actions, or follow arbitrary URLs in page content.
+- Normalize provider data into typed internal schemas. Store and return only a bounded source-grounded excerpt and attribution metadata.
+- Show source URL, publisher/domain, retrieval time, publication time when provided, and current/stale/unknown freshness. Never invent publication times or imply that a source is verified just because a request succeeded.
+- Use deterministic provider mocks for ordinary tests. Network-dependent integration tests must be opt-in.
+- Agent/browser automation is outside MVP scope and requires a separately approved use case.
+
+### 8.3 Detector Integration
 
 The selected detector should be invoked through an internal detector adapter, not through an undocumented browser-to-model request.
 
@@ -845,7 +896,7 @@ Detector failures must be converted into explicit processing errors. Invalid or 
 
 If a simulated detector is used, the resulting source and events must remain clearly identified as simulated.
 
-### 8.3 Object Storage
+### 8.4 Object Storage
 
 Object storage is optional and depends on the approved deployment.
 
@@ -858,11 +909,11 @@ If used:
 - Avoid logging full signed URLs.
 - Handle missing objects and provider outages as evidence availability failures.
 
-### 8.4 No External Notifications or Dispatch
+### 8.5 No External Notifications or Dispatch
 
 Automated notifications, emergency-service dispatch, facial-recognition APIs, and other excluded services must not be added to the MVP.
 
-### 8.5 Webhooks
+### 8.6 Webhooks
 
 No inbound or outbound external webhooks are required for the MVP.
 
@@ -961,6 +1012,12 @@ Only variables required by the selected implementation should be enabled. No sec
 | WORKER_POLL_INTERVAL_SECONDS | Yes for database polling worker | Delay between job-queue checks |
 | WORKER_MAX_ATTEMPTS | Yes | Maximum processing attempts |
 | LOG_LEVEL | Yes | Logging verbosity |
+| TINYFISH_CONTEXT_ENABLED | Yes | Feature flag for public context retrieval; false by default when not configured |
+| TINYFISH_API_KEY | Required only when TinyFish context is enabled | TinyFish Search/Fetch API key; secret, backend/worker only |
+| TINYFISH_REQUEST_TIMEOUT_SECONDS | Yes when enabled | Maximum provider request duration |
+| TINYFISH_MAX_RESULTS_PER_REFRESH | Yes when enabled | Maximum search candidates and fetched URLs per refresh; enforce a conservative MVP bound |
+| TINYFISH_CONTEXT_TTL_SECONDS | Yes when enabled | Freshness/cache window used to mark stored context current or stale |
+| TINYFISH_ALLOWED_DOMAINS | Conditional | Server-side allowlist of approved public source domains when configured |
 
 Additional settings may be required for a chosen model or object-storage provider.
 
@@ -1089,9 +1146,18 @@ Retries must not create duplicate side effects.
 
 ### 12.7 Timeouts
 
-Apply documented request timeouts for database and storage operations. Video inference and full evaluation belong in the worker rather than in long-running HTTP requests.
+Apply documented request timeouts for database and storage operations. Video inference, full evaluation, and TinyFish retrieval belong in the worker rather than in long-running HTTP requests.
 
 A client timeout must not be interpreted as proof that a server-side operation failed; the client should retrieve the resource or job status before submitting the same operation again.
+
+### 12.8 TinyFish Failure Handling
+
+- Missing key or disabled configuration returns an explicit unavailable/disabled context state; it does not prevent application startup unless deployment policy explicitly requires the integration.
+- Provider timeout, 401/403, 429, 5xx, malformed response, and per-URL fetch failure are logged as sanitized diagnostic categories and reflected in the job status.
+- Back off on rate limits and transient service errors; do not retry unauthorized, invalid, or malformed requests indefinitely.
+- Keep existing context items with their original retrieved timestamps when a later refresh fails. Do not update timestamps to make stale entries look fresh.
+- Distinguish no results from retrieval failure. Neither state implies the area is safe.
+- TinyFish outages must not change detection behavior or block incident review, evidence playback, authentication, or evaluation of labeled video.
 
 ---
 
@@ -1130,6 +1196,9 @@ Automated tests must cover:
 - Safe error formatting.
 - Session expiration and CSRF validation.
 - Database or storage unavailability.
+- Context list/refresh permissions, source enablement validation, bounded query fields, and context freshness semantics.
+- TinyFish success, empty results, stale results, missing publication time, timeout, rate limit, malformed payload, and disabled configuration using mocked provider responses.
+- Verify that external context cannot create an incident, change detector/reliability fields, or overwrite a human review.
 
 ### 13.3 Evaluation Tests
 
@@ -1165,6 +1234,10 @@ Before the API is considered ready, verify that:
 - [ ] All API errors follow a consistent schema.
 - [ ] Upload limits, authentication limits, and appropriate rate controls are implemented.
 - [ ] The API has no unnecessary external webhook or notification endpoints.
+- [ ] TinyFish Search/Fetch is called only by the backend/worker and only for approved public context.
+- [ ] Context refresh runs asynchronously through a `context_enrichment` job and has bounded timeouts, counts, and retry behavior.
+- [ ] Context items preserve source URL, topic, publisher/domain, retrieved time, publication time when available, and freshness status.
+- [ ] TinyFish disabled/unavailable states do not block incident review or video processing.
 - [ ] Secrets never enter client bundles, JSON responses, or logs.
 - [ ] Failure handling covers database, storage, detector, and worker failures.
 - [ ] OpenAPI and automated contract tests reflect the implemented contract.
@@ -1177,6 +1250,6 @@ The SafeCity AI API is a versioned REST interface served by FastAPI. It manages 
 
 PostgreSQL is the authoritative source for workflow state. Video processing and evaluation execute asynchronously through a background worker. Media remains in private storage and is exposed only through authorized evidence access.
 
-The MVP does not require external AI APIs or public webhooks. It uses one configured detector or a clearly labeled simulated source and calculates performance metrics only from valid, documented inputs.
+The MVP uses one configured detector or a clearly labeled simulated source and calculates video-detection metrics only from valid, documented inputs. TinyFish Search and Fetch provide a separate, feature-flagged path for attributed public-web context; this provider receives no surveillance media or personal data and cannot determine incident truth or trigger consequential actions. No public webhook is required.
 
 **The defining API principle is simple: every operation must be authenticated and authorized when required, every result must communicate its actual state, and every reliability claim must remain traceable to its evidence and evaluation context.**
