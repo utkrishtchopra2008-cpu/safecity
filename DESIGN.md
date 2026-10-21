@@ -619,6 +619,32 @@ All tooltip information must remain available to keyboard users, and essential c
 
 ---
 
+### 7.14 Public Context Item and Panel
+
+Use a shared **Public Context** panel on the dashboard and incident detail where context is available. It presents candidate information retrieved from public webpages, not verified incident facts.
+
+Each item should show:
+
+- Topic label, such as weather advisory, transport disruption, public notice, public event, or other.
+- Source title and publisher/domain when available.
+- A short, bounded excerpt or source-grounded summary.
+- A clearly actionable source link that opens the original page safely in a new tab.
+- Publication/update time when supplied by the source and retrieval time from SafeCity AI.
+- A freshness state such as current within the configured window, stale, or age unknown.
+
+Interaction and presentation rules:
+
+- Keep public context visually and semantically separate from model detections, reliability assessments, human review outcomes, and severity/status labels.
+- Do not use a context item to change an incident's status or color. It must not look like a confirmed alert.
+- Never hide the source attribution behind a tooltip. Make the origin and retrieval time visible at a glance.
+- Long content must be truncated at a documented limit with the full original source available through its link; do not render fetched HTML directly.
+- If dates are absent or ambiguous, show “Publication time unavailable” instead of inventing one.
+- Display loading, no relevant results, context unavailable, partial results, and stale/unknown-age states distinctly.
+- If TinyFish is disabled or unavailable, show a quiet explanatory state without blocking evidence review or filling the panel with fabricated data.
+- The panel must be keyboard accessible, announce meaningful status changes, and not rely on color alone.
+
+---
+
 ## 8. Forms and Data Entry
 
 ### 8.1 General Form Rules
@@ -697,6 +723,7 @@ Recommended structure:
 3. Recent or unresolved incidents.
 4. Source and processing status.
 5. Reliability summary where sufficient data exists.
+6. Public-context summary for configured source areas, when available, with the latest retrieval time and a direct path to source details.
 
 Layout rules:
 
@@ -748,6 +775,7 @@ On desktop, use a two-column layout.
 - Evidence-sufficiency and uncertainty information.
 - Observation-based explanation, when available.
 - Human review outcome controls.
+- Public context associated with the source area, when configured and available, visually separated from video evidence and detector findings.
 
 Recommended proportions:
 
