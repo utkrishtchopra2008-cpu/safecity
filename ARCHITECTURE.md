@@ -1169,9 +1169,9 @@ Every future integration must be reviewed for authentication, data exposure, lic
 
 ### 12.4 External AI Services
 
-Do not send real surveillance footage or identifying information to an external AI service by default.
+TinyFish is approved only for the public-web context workflow described in Section 12.2. This approval does not permit sending surveillance footage, frames, evidence bytes, identifying information, personal data, private URLs, or restricted institutional details to TinyFish.
 
-If an external provider is later considered, approval is required for the provider, data-processing terms, retention behavior, security boundaries, and the permitted types of data.
+Do not add an external video-inference, language-model interpretation, facial-recognition, or identity service to the surveillance workflow by default. Any additional external provider or any proposed use of non-public data requires explicit approval of the provider, purpose, data-processing terms, retention behavior, security boundaries, and permitted data types.
 
 ### 12.5 Network Boundaries
 
