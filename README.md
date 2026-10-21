@@ -6,7 +6,7 @@ This branch contains the initial project foundation. Feature workflows (authenti
 
 ## Technology
 
-- **Frontend:** React 19, TypeScript, Vite, React Router, TanStack Query, CSS Modules/CSS variables, Recharts, Lucide React, Vitest, and React Testing Library.
+- **Frontend:** React 19, TypeScript, Vite, React Router, TanStack Query, CSS variables/CSS Modules (as needed), Lucide React, Vitest, and React Testing Library. Charting dependencies are deferred until metric charts are implemented.
 - **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Psycopg 3, HTTPX, pytest, Ruff, and mypy.
 - **Database:** PostgreSQL 16 for local development via Docker Compose.
 - **External context:** TinyFish Search/Fetch is documented but disabled by default; this scaffold does not make TinyFish requests.
