@@ -23,7 +23,9 @@ export function AppShell() {
         <Outlet />
       </main>
       <footer className="app-footer">
-        <span>Evidence first. Uncertainty is explicit. People remain responsible for decisions.</span>
+        <span>
+          Evidence first. Uncertainty is explicit. People remain responsible for decisions.
+        </span>
       </footer>
     </div>
   );

@@ -65,7 +65,10 @@ export function SetupStatusPage() {
         <div className="checklist">
           {foundationItems.map((item) => (
             <article className="checklist-item" key={item.title}>
-              <span className={`checklist-icon ${item.ready ? 'is-ready' : 'is-pending'}`} aria-hidden="true">
+              <span
+                className={`checklist-icon ${item.ready ? 'is-ready' : 'is-pending'}`}
+                aria-hidden="true"
+              >
                 {item.ready ? <CheckCircle2 size={19} /> : <CircleDashed size={19} />}
               </span>
               <div className="checklist-copy">
@@ -89,7 +92,9 @@ export function SetupStatusPage() {
         <dl className="config-grid">
           <div>
             <dt>API base path</dt>
-            <dd><code>{API_BASE_URL}</code></dd>
+            <dd>
+              <code>{API_BASE_URL}</code>
+            </dd>
           </div>
           <div>
             <dt>Context provider</dt>
@@ -104,7 +109,12 @@ export function SetupStatusPage() {
           Next step: connect the database and validate the backend development loop before adding
           feature endpoints.
         </p>
-        <a className="text-link" href="https://github.com/utkrishtchopra2008-cpu/safecity/blob/main/IMPLEMENTATION_PLAN.md" target="_blank" rel="noreferrer">
+        <a
+          className="text-link"
+          href="https://github.com/utkrishtchopra2008-cpu/safecity/blob/main/IMPLEMENTATION_PLAN.md"
+          target="_blank"
+          rel="noreferrer"
+        >
           View implementation plan <ArrowUpRight size={15} aria-hidden="true" />
         </a>
       </Surface>

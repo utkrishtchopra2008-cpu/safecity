@@ -46,7 +46,9 @@ class AppSettings(BaseModel):
             return None
         return value
 
-    @field_validator("csrf_allowed_origins", "cors_origins", "tinyfish_allowed_domains", mode="before")
+    @field_validator(
+        "csrf_allowed_origins", "cors_origins", "tinyfish_allowed_domains", mode="before"
+    )
     @classmethod
     def parse_comma_separated_values(cls, value: object) -> object:
         if isinstance(value, str):

@@ -28,17 +28,7 @@ jobs:
         run: npm run lint
       - name: Check formatting
         working-directory: frontend
-        run: |
-          if npm run format:check; then
-            exit 0
-          fi
-          npx prettier --config ../.prettierrc.json --ignore-path ../.prettierignore --write index.html src/api/client.test.ts src/api/client.ts src/components/AppShell.tsx src/pages/NotFoundPage.tsx src/pages/SetupStatusPage.tsx src/styles/tokens.css
-          echo "=== TEMPORARY PRETTIER SOURCE DUMP ==="
-          for file in index.html src/api/client.test.ts src/api/client.ts src/components/AppShell.tsx src/pages/NotFoundPage.tsx src/pages/SetupStatusPage.tsx src/styles/tokens.css; do
-            echo "===== $file ====="
-            cat "$file"
-          done
-          exit 1
+        run: npm run format:check
       - name: Typecheck
         working-directory: frontend
         run: npm run typecheck
@@ -54,6 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.12'
@@ -69,17 +61,7 @@ jobs:
         run: uv run ruff check app tests migrations
       - name: Check formatting
         working-directory: backend
-        run: |
-          if uv run ruff format --check app tests migrations; then
-            exit 0
-          fi
-          uv run ruff format app tests migrations
-          echo "=== TEMPORARY RUFF FORMATTED SOURCE DUMP ==="
-          for file in app/core/config.py app/main.py migrations/env.py; do
-            echo "===== $file ====="
-            cat "$file"
-          done
-          exit 1
+        run: uv run ruff format --check app tests migrations
       - name: Typecheck
         working-directory: backend
         run: uv run mypy app

@@ -14,7 +14,9 @@ describe('requestJson', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(requestJson<{ status: string }>('/test-resource')).resolves.toEqual({ status: 'alive' });
+    await expect(requestJson<{ status: string }>('/test-resource')).resolves.toEqual({
+      status: 'alive',
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/v1\/test-resource$/),
       expect.objectContaining({ credentials: 'include' }),
@@ -25,10 +27,17 @@ describe('requestJson', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ code: 'DEPENDENCY_UNAVAILABLE', detail: 'Try again later.', request_id: 'req-test' }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/problem+json' },
-        }),
+        new Response(
+          JSON.stringify({
+            code: 'DEPENDENCY_UNAVAILABLE',
+            detail: 'Try again later.',
+            request_id: 'req-test',
+          }),
+          {
+            status: 503,
+            headers: { 'Content-Type': 'application/problem+json' },
+          },
+        ),
       ),
     );
 

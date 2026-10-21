@@ -23,7 +23,10 @@ export class ApiError extends Error {
 }
 
 function isJsonContentType(contentType: string | null): boolean {
-  return contentType !== null && (contentType.includes('application/json') || contentType.includes('+json'));
+  return (
+    contentType !== null &&
+    (contentType.includes('application/json') || contentType.includes('+json'))
+  );
 }
 
 async function readProblem(response: Response): Promise<ApiProblem> {
@@ -60,7 +63,11 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
       credentials: 'include',
     });
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', 'The API could not be reached. Check the connection and retry.');
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      'The API could not be reached. Check the connection and retry.',
+    );
   }
 
   if (!response.ok) {
@@ -75,7 +82,11 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
 
   if (response.status === 204) return undefined as T;
   if (!isJsonContentType(response.headers.get('content-type'))) {
-    throw new ApiError(response.status, 'UNEXPECTED_RESPONSE', 'The API returned an unexpected response format.');
+    throw new ApiError(
+      response.status,
+      'UNEXPECTED_RESPONSE',
+      'The API returned an unexpected response format.',
+    );
   }
 
   return (await response.json()) as T;
