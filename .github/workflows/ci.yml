@@ -69,7 +69,17 @@ jobs:
         run: uv run ruff check app tests migrations
       - name: Check formatting
         working-directory: backend
-        run: uv run ruff format --check app tests migrations
+        run: |
+          if uv run ruff format --check app tests migrations; then
+            exit 0
+          fi
+          uv run ruff format app tests migrations
+          echo "=== TEMPORARY RUFF FORMATTED SOURCE DUMP ==="
+          for file in app/core/config.py app/main.py migrations/env.py; do
+            echo "===== $file ====="
+            cat "$file"
+          done
+          exit 1
       - name: Typecheck
         working-directory: backend
         run: uv run mypy app
