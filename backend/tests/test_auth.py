@@ -343,6 +343,59 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
     }
 
 
+def test_supervisor_system_status_reports_aggregate_counts_and_degradation(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    factory = auth_client.app.state.test_session_factory
+    with factory() as database:
+        operator = database.query(User).filter_by(email="operator@example.com").one()
+        operator.role = "supervisor"
+        database.commit()
+
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+
+    class CountResult:
+        def __init__(self, rows: list[tuple[str, int]]) -> None:
+            self.rows = rows
+
+        def all(self) -> list[tuple[str, int]]:
+            return self.rows
+
+    class StatusDatabase:
+        def __init__(self, database: OrmSession) -> None:
+            self.database = database
+
+        def __getattr__(self, name):
+            return getattr(self.database, name)
+
+        def execute(self, statement, *args, **kwargs):
+            sql = str(statement).lower()
+            if "from sources" in sql:
+                return CountResult([("active", 2), ("failed", 1)])
+            if "from processing_jobs" in sql:
+                return CountResult([("completed", 4), ("failed", 1)])
+            return self.database.execute(statement, *args, **kwargs)
+
+    def status_db() -> Generator[StatusDatabase, None, None]:
+        with factory() as database:
+            yield StatusDatabase(database)
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, status_db)
+
+    response = auth_client.get("/api/v1/system/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "degraded",
+        "sources": {"active": 2, "failed": 1},
+        "jobs": {"completed": 4, "failed": 1},
+    }
+
+
 def test_reliability_route_requires_authentication(auth_client: TestClient) -> None:
     response = auth_client.get("/api/v1/reliability/summary")
 
