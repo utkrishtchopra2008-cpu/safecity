@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from argon2 import PasswordHasher
@@ -267,6 +268,60 @@ def test_operator_can_list_sources_and_missing_source_is_not_found(
     assert listing.json() == []
     assert detail.status_code == 404
     assert detail.json()["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_operator_can_read_owned_job_without_sensitive_diagnostics(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+    user_id = uuid.UUID(login.json()["user"]["id"])
+    job_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    job = SimpleNamespace(
+        id=job_id,
+        created_by=user_id,
+        job_type="source_processing",
+        status="failed",
+        created_at=now,
+        started_at=now,
+        finished_at=now,
+        attempt_count=2,
+        error_code="INTERNAL_PATH_DISCLOSED",
+        error_summary="Sensitive provider diagnostic",
+        result_metadata={"duration_seconds": 1.5, "private_path": "/srv/private/video.mp4"},
+    )
+
+    factory = auth_client.app.state.test_session_factory
+
+    class JobDatabase:
+        def __init__(self, database: OrmSession) -> None:
+            self.database = database
+
+        def __getattr__(self, name):
+            return getattr(self.database, name)
+
+        def get(self, _model, requested_id):
+            return job if requested_id == job_id else None
+
+    def job_db() -> Generator[JobDatabase, None, None]:
+        with factory() as database:
+            yield JobDatabase(database)
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, job_db)
+
+    response = auth_client.get(f"/api/v1/jobs/{job_id}")
+    hidden_job = auth_client.get(f"/api/v1/jobs/{uuid.uuid4()}")
+
+    assert response.status_code == 200
+    assert response.json()["result_metadata"] == {"duration_seconds": 1.5}
+    assert response.json()["error_code"] is None
+    assert response.json()["error_summary"] is None
+    assert hidden_job.status_code == 404
+    assert hidden_job.json()["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_reliability_route_requires_authentication(auth_client: TestClient) -> None:

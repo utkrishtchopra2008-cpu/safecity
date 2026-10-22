@@ -7,9 +7,9 @@ This repository contains a partial SafeCity implementation. It is not production
 | Area | Result |
 |---|---|
 | Backend Ruff lint | Passed with the locked backend environment. |
-| Backend Ruff format check | Passed; 49 files formatted. |
+| Backend Ruff format check | Passed; 54 files formatted. |
 | Backend mypy | Passed; no issues in 41 source files. |
-| Backend pytest | 97 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
+| Backend pytest | 98 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
 | Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
 | Frontend lint/typecheck/unit tests/build | Passed; 12 Vitest tests, including the AppShell skip-link/navigation contract and inert rendering of HTML-like TinyFish text. |
@@ -21,7 +21,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | TinyFish | Search/Fetch request handling, URL boundaries and provider failures passed mocked tests; source-level refresh passed SQLite persistence/deduplication and disabled-provider tests. No live request or PostgreSQL queue integration was run; no key is configured. |
 | Visual and accessibility review | Partial manual review: login and protected-route error states were inspected in the browser; responsive header checked at 1024 px and 390 px, with no horizontal overflow at 390 px. Full-page screenshot and keyboard/contrast audit remains NOT RUN. |
 
-The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, and inert external-content rendering. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on commit `5067e76`.
+The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, inert external-content rendering, and operator job ownership with safe diagnostic/result redaction. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on the previously published commit `30a84a9`; this verification-only test addition still needs its CI run.
 
 ## Operational constraints and remaining requirements
 
