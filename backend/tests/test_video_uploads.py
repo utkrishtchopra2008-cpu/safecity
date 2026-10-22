@@ -65,3 +65,21 @@ def test_mismatched_content_signature_is_rejected_before_decode(
 
     with pytest.raises(uploads.UploadValidationError):
         asyncio.run(run())
+
+
+def test_client_path_in_filename_is_never_used_for_staging_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(uploads, "_inspect_video", lambda _path, _limit: (1.0, 16, 16))
+    file = upload_file(valid_mp4_header())
+    file.filename = "../../outside.mp4"
+
+    async def run() -> uploads.StagedVideo:
+        return await uploads.stage_video_upload(file, AppSettings())
+
+    staged = asyncio.run(run())
+    try:
+        assert staged.path.name.startswith("safecity-upload-")
+        assert staged.path.read_bytes() == valid_mp4_header()
+    finally:
+        staged.remove()

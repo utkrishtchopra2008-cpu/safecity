@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime
@@ -43,6 +44,7 @@ def auth_client() -> Generator[TestClient, None, None]:
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_settings] = lambda: test_settings
+    app.state.test_session_factory = factory
     with factory() as database:
         database.add(
             User(
@@ -59,6 +61,7 @@ def auth_client() -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
+    del app.state.test_session_factory
     engine.dispose()
 
 
@@ -107,6 +110,31 @@ def test_logout_requires_csrf_and_revokes_session(auth_client: TestClient) -> No
         headers={"Origin": "http://testserver", "X-CSRF-Token": csrf.json()["csrf_token"]},
     )
     assert logged_out.status_code == 204
+    assert auth_client.get("/api/v1/auth/me").status_code == 401
+
+
+@pytest.mark.parametrize("invalid_state", ["expired", "revoked"])
+def test_expired_or_revoked_session_is_rejected(
+    auth_client: TestClient, invalid_state: str
+) -> None:
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+    raw_token = auth_client.cookies.get(COOKIE_NAME)
+    assert raw_token
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    factory = auth_client.app.state.test_session_factory
+    with factory() as database:
+        record = database.query(Session).filter_by(token_hash=token_hash).one()
+        if invalid_state == "expired":
+            record.created_at = datetime(1999, 1, 1, tzinfo=UTC)
+            record.expires_at = datetime(2000, 1, 1, tzinfo=UTC)
+        else:
+            record.revoked_at = datetime.now(UTC)
+        database.commit()
+
     assert auth_client.get("/api/v1/auth/me").status_code == 401
 
 
