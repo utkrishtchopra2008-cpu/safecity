@@ -10,9 +10,11 @@ import pytest
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.datastructures import Headers, UploadFile
 
 from app.core.config import AppSettings
 from app.db.models import ProcessingJob, Source
+from app.media.uploads import stage_video_upload
 from app.worker import claim_next_job, run_once, sample_quality
 
 
@@ -162,10 +164,6 @@ def test_real_opencv_upload_and_quality_path_on_small_generated_avi(tmp_path: Pa
     for value in range(10):
         writer.write(np.full((64, 64, 3), value * 20, dtype=np.uint8))
     writer.release()
-
-    from starlette.datastructures import Headers, UploadFile
-
-    from app.media.uploads import stage_video_upload
 
     async def validate() -> tuple[Path, float, object]:
         with video_path.open("rb") as source:
