@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.api.v1.auth import AuthContext, require_csrf, require_roles
 from app.core.config import AppSettings, get_settings
+from app.core.rate_limit import SlidingWindowLimiter
 from app.db.models import Evidence, ExternalContextItem, ProcessingJob, Source
 from app.db.session import get_db
 from app.media.uploads import UploadTooLarge, UploadValidationError, stage_video_upload
@@ -23,6 +24,18 @@ from app.services.audit import record_security_event
 from app.storage.supabase import StorageUnavailable, SupabaseStorage
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+source_create_limiter = SlidingWindowLimiter(limit=10, window_seconds=60)
+source_process_limiter = SlidingWindowLimiter(limit=10, window_seconds=60)
+
+
+def _enforce_user_limit(limiter: SlidingWindowLimiter, user_id: UUID) -> None:
+    retry_after = limiter.check(str(user_id))
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait before starting another source operation.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 class SimulatedSourceCreate(BaseModel):
@@ -158,6 +171,7 @@ def register_simulated_source(
     _csrf: AuthContext = Depends(require_csrf),
     database: OrmSession = Depends(get_db),
 ) -> SourceResponse:
+    _enforce_user_limit(source_create_limiter, context.user.id)
     if body.source_type != "simulated":
         raise HTTPException(status_code=422, detail="VALIDATION_ERROR")
     if body.context_retrieval_enabled and not body.context_area_label:
@@ -352,6 +366,7 @@ async def upload_source(
     database: OrmSession = Depends(get_db),
     settings: AppSettings = Depends(get_settings),
 ) -> UploadAccepted:
+    _enforce_user_limit(source_create_limiter, context.user.id)
     if context_retrieval_enabled and not context_area_label:
         raise HTTPException(status_code=422, detail="VALIDATION_ERROR")
     if settings.storage_backend != "supabase" or not settings.supabase_configured:
@@ -455,6 +470,7 @@ def request_source_processing(
     database: OrmSession = Depends(get_db),
     settings: AppSettings = Depends(get_settings),
 ) -> ProcessingAccepted:
+    _enforce_user_limit(source_process_limiter, context.user.id)
     with database.begin():
         source = database.scalar(select(Source).where(Source.id == source_id).with_for_update())
         if source is None:

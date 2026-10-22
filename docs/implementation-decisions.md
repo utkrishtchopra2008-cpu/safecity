@@ -17,14 +17,15 @@
 - The worker performs bounded OpenCV quality sampling for uploaded clips and bounded TinyFish Search/Fetch for explicitly enabled simulated sources. It creates no incident predictions; evaluation jobs fail safely until a verified detector/evaluation handler exists.
 - Use the existing framework, package managers and pinned frontend dependencies. Do not upgrade major versions or add an unsupported provider/model.
 - Treat unavailable/null metric values as unavailable, never as zero; persist provenance needed to reproduce actual calculations.
+- Apply the API.md single-instance starting limits to source registration/upload/processing and evaluation creation using bounded in-process sliding windows. They are intentionally not represented as distributed enforcement; multi-instance deployment needs a trusted proxy/shared limiter.
 - The implemented evaluation metric helper uses exact category plus positive interval overlap, maximum-cardinality one-to-one matching, and stable tie-breaking. It is bounded to 1,000 combined events. This is recorded as a versioned implementation rule; the calculation helper is not yet connected to a worker or persisted evaluation run.
 
 ## Unresolved/blocked items
 
-- The submitted prompt pack jumps from Prompt 2 to Prompt 4; Prompt 3 was not supplied. Video-processing work therefore follows only the repository authorities and the explicit Prompt 0 safety contract.
-- The bundled Python 3.12 runtime was used with dependencies installed outside the repository; `uv` was unavailable. Backend lint, format, typing, and unit tests ran. The optional PostgreSQL test skips when no disposable database URL is configured.
+- The submitted prompt pack contains Prompts 0, 1, 2, 5, 6, 7 and 8; Prompts 3 and 4 are absent. Work follows repository authorities and the explicit Prompt 0 safety contract without inferring missing prompt text.
+- Backend checks run with the committed `backend/uv.lock`; the optional PostgreSQL test skips when no disposable database URL is configured.
 - A disposable PostgreSQL migration/integrity run was completed earlier in this work session. No Supabase project credentials are configured, so live RLS and private Storage checks remain unavailable.
-- Authentication, basic incident/review routes and limited source routes now exist. Resource authorization lacks a source-membership/tenant schema, and the complete API endpoint catalogue is still not implemented. RLS policies in `docs/supabase-storage.md` still need application in a configured project.
+- The API endpoint catalogue is inventoried in `docs/implementation-audit.md`; several responses/role paths still lack positive contract tests. Resource authorization follows the single-institution contract and has no source-membership/tenant schema. RLS policies in `docs/supabase-storage.md` still need application in a configured project.
 - A pinned OpenCV Zoo YOLOX-S INT8BQ object model (Apache-2.0, SHA-256 verified) and YuNet face-region model (MIT, SHA-256 verified) are now implemented as optional CPU-only observation detectors. See `docs/model-artifacts.md`. Model files remain outside Git and fail closed on checksum mismatch. Their COCO/WIDER-Face behavior does not provide event classification, face recognition, or production performance claims.
 - No approved incident/event detector or licensed evaluation dataset was found. Real event inference, incident generation from uploads, and detector-backed evaluation remain blocked; no fabricated event output will be added.
 - No TinyFish secret is configured. Provider behavior can only be implemented and verified with mocks until an operator configures a backend secret.

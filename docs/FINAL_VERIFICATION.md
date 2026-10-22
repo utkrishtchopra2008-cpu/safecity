@@ -9,7 +9,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | Backend Ruff lint | Passed with the locked backend environment. |
 | Backend Ruff format check | Passed; 49 files formatted. |
 | Backend mypy | Passed; no issues in 37 source files. |
-| Backend pytest | 79 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
+| Backend pytest | 85 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
 | Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
 | Frontend lint/typecheck/unit tests/build | Passed; 11 Vitest tests, including inert rendering of HTML-like TinyFish text. |
@@ -21,12 +21,12 @@ This repository contains a partial SafeCity implementation. It is not production
 | TinyFish | Search/Fetch request handling, URL boundaries and provider failures passed mocked tests; source-level refresh passed SQLite persistence/deduplication and disabled-provider tests. No live request or PostgreSQL queue integration was run; no key is configured. |
 | Visual and accessibility review | NOT RUN as a full page/viewport screenshot audit. |
 
-The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, and inert external-content rendering. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on commit `e0a54f7`.
+The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, and inert external-content rendering. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on commit `98aa031`.
 
 ## Operational constraints and remaining requirements
 
 - Optional local walkthrough fixture: after applying migrations, from `backend/` run `uv run python -m app.cli.seed_demo --apply` with `APP_ENV=development` and a development-only `DATABASE_URL`. It refuses shared/production modes and adds a plainly labelled synthetic sample with no detector score or reliability claim. See `docs/demo-data.md`.
-- Threat model: `docs/threat-model.md` records account/session, authorization, CSRF, upload/parser, resource, secrets, storage URL, public-content injection, SSRF, provider-rate, and audit/deletion risks with tests and remaining limits.
+- Threat model and rate limits: `docs/threat-model.md` records account/session, authorization, CSRF, upload/parser, resource, secrets, storage URL, public-content injection, SSRF, provider-rate, and audit/deletion risks with tests and remaining limits. API defaults for this single-instance MVP are in `API.md` §9.3; shared deployment must enforce limits at the trusted proxy or shared boundary.
 
 - Apply `backend/migrations` to a configured PostgreSQL database before running authenticated workflows. Use backend-only `DATABASE_URL`; configure Supabase URL/service role and private bucket for video uploads.
 - `docs/supabase-storage.md` documents the deny-by-default Storage policy path. These policies have not been applied or tested against a live project. Backend resource checks remain required because a service-role key bypasses RLS.
@@ -38,7 +38,7 @@ The latest local regression run also covers rejection of expired/revoked session
 ## Changed implementation areas
 
 - Database models/migration, upload validation and Storage adapter: `backend/app/db`, `backend/migrations`, `backend/app/media`, `backend/app/storage`.
-- Optional pinned CPU observation models, source/upload admin workflow, deterministic local demo seed, and TinyFish inert-text regression: `backend/app/services/opencv_models.py`, `backend/app/cli/download_models.py`, `backend/app/cli/seed_demo.py`, `frontend/src/components/SourceAdminPanel.tsx`, `frontend/src/pages/PublicContextPage.test.tsx`, `docs/model-artifacts.md`, `docs/demo-data.md`, `docs/threat-model.md`.
+- Optional pinned CPU observation models, source/upload admin workflow, deterministic local demo seed, request limits, and TinyFish inert-text regression: `backend/app/services/opencv_models.py`, `backend/app/cli/download_models.py`, `backend/app/cli/seed_demo.py`, `backend/app/core/rate_limit.py`, `frontend/src/components/SourceAdminPanel.tsx`, `frontend/src/pages/PublicContextPage.test.tsx`, `docs/model-artifacts.md`, `docs/demo-data.md`, `docs/threat-model.md`.
 - Worker integration and safe result metadata: `backend/app/worker.py`, `backend/app/api/v1/jobs.py`.
 - Auth, incident/review and source routes/services: `backend/app/api/v1`, `backend/app/services`, `backend/app/main.py`.
 - Frontend login and incident workflows: `frontend/src/api`, `frontend/src/app/router.tsx`, `frontend/src/pages`, `frontend/src/styles/global.css`.

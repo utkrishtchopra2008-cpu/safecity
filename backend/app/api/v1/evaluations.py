@@ -13,10 +13,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session as OrmSession
 
 from app.api.v1.auth import AuthContext, get_auth_context, require_csrf, require_roles
+from app.core.rate_limit import SlidingWindowLimiter
 from app.db.models import EvaluationDataset, EvaluationRun, MetricResult
 from app.db.session import get_db
 
 router = APIRouter(prefix="/evaluations", tags=["evaluations"])
+evaluation_create_limiter = SlidingWindowLimiter(limit=5, window_seconds=60)
 
 
 class EvaluationMetricItem(BaseModel):
@@ -160,6 +162,13 @@ def create_evaluation(
     _csrf: AuthContext = Depends(require_csrf),  # noqa: B008
     database: OrmSession = Depends(get_db),  # noqa: B008
 ) -> EvaluationAccepted:
+    retry_after = evaluation_create_limiter.check(str(_context.user.id))
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait before starting another evaluation.",
+            headers={"Retry-After": str(retry_after)},
+        )
     dataset = database.get(EvaluationDataset, body.dataset_id)
     if dataset is None or dataset.status != "ready":
         raise HTTPException(status_code=422, detail="DATASET_UNAVAILABLE")
