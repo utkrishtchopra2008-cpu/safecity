@@ -749,6 +749,25 @@ th {
   background: var(--color-surface);
 }
 
+@media (max-width: 1100px) {
+  .topbar {
+    height: auto;
+    min-height: var(--topbar-height);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+  }
+
+  .primary-nav {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--space-3);
+    margin-left: 0;
+    padding: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .two-column-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -769,10 +788,17 @@ th {
 
   .primary-nav {
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--space-2);
     padding: 0;
     font-size: var(--font-size-xs);
+  }
+
+  .primary-nav a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    padding-inline: var(--space-1);
   }
 
   .page-header,
