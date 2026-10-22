@@ -2,7 +2,8 @@ import asyncio
 import io
 
 import pytest
-from starlette.datastructures import Headers, UploadFile as StarletteUploadFile
+from starlette.datastructures import Headers
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.core.config import AppSettings
 from app.media import uploads
