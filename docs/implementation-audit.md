@@ -1,12 +1,12 @@
 # Implementation audit and traceability
 
-Audit refreshed against `main` commit `3c519ad` on 2026-10-23. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` was excluded as instructed. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
+Audit refreshed against `main` commit `a42acc0` on 2026-10-23. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` was excluded as instructed. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
 
 ## Repository and environment
 
 | Finding | Status | Evidence |
 |---|---|---|
-| Checkout and working tree | CONFIRMED | Clean `main`, commit `3c519ad`; `git status --short --branch`. |
+| Checkout and working tree | CONFIRMED | Clean `main`, commit `a42acc0`; `git status --short --branch`. |
 | Specifications | CONFIRMED | All six authority documents and `AGENTS.md` present at repository root. |
 | Frontend foundation | PARTIAL | `frontend/src/app/router.tsx` and pages for login, dashboard, incidents, reliability, evaluations, system status, and setup implement selected workflows. Technical-admin source registration/upload controls are in `frontend/src/components/SourceAdminPanel.tsx`; `frontend/src/components/SourceAdminPanel.test.tsx` covers DEMO registration, upload/results, and storage failure. Full interaction/accessibility coverage is absent. |
 | Backend foundation | PARTIAL | `backend/app/main.py`, `backend/app/core/config.py`; liveness and DB-probing readiness exist. Worker health is honestly `not_running`; storage readiness is configuration-only. |
@@ -57,3 +57,55 @@ Cross-cutting checks: implementation remains materially narrower than the produc
 6. Full verification and release notes: run only checks supported by available runtimes/services; report unavailable checks as NOT RUN/BLOCKED.
 
 Change scope is reversible and additive: migrations only, no destructive data changes, no real secrets or media. Primary conflict risk is shared contract/schema work; keep API/database/auth/video/frontend boundaries in their existing directories. Optional improvements are deferred; all PRD “must have” capabilities remain mandatory. Rollout requires backups, explicit migration, configured secrets and rollback to the prior app revision; no calendar estimate is asserted.
+
+## Detailed acceptance trace
+
+Statuses below describe implemented proof, not a claim that the entire parent requirement is complete. Where a detector or approved labeled dataset is absent, the safe behavior is explicitly unavailable and the listed test proves that boundary.
+
+### PRD functional requirements and acceptance tests
+
+| Requirement | Status | Implementation and proof / remaining gate |
+|---|---|---|
+| FR-001–003 controlled access, roles, backend enforcement | PARTIAL | `backend/app/api/v1/auth.py`, `backend/app/api/v1/evidence.py`, `backend/app/main.py`; `backend/tests/test_auth.py`; broader role/resource negative matrix remains. |
+| FR-004–008 candidate intake, normalization, validation, duplicates, processing status | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/services/incidents.py`, `backend/app/worker.py`, `backend/app/db/models.py`; `backend/tests/test_postgres_integrity.py`, `backend/tests/test_video_uploads.py`, `backend/tests/test_worker.py`; no genuine event detector is configured. |
+| FR-009–015 measured quality, assessment, sufficiency, uncertainty, semantics, safe conclusions | PARTIAL | `backend/app/worker.py`, `backend/app/services/opencv_models.py`, `backend/app/db/models.py`; `backend/tests/test_opencv_models.py`, `backend/tests/test_worker.py`; insufficient-event evidence behavior and detector-driven abstention need an approved detector contract. |
+| FR-016–020 evidence association, missing/integrity/explanation/access | PARTIAL | `backend/app/api/v1/evidence.py`, `backend/app/api/v1/incidents.py`, `backend/app/storage/supabase.py`, `backend/app/db/models.py`; `backend/tests/test_auth.py`, `backend/tests/test_supabase_storage.py`; live Supabase and complete source-level authorization remain unverified. |
+| FR-021–027 incident list/detail/filter/review/prediction separation/notes/history | PARTIAL | `backend/app/services/incidents.py`, `backend/app/api/v1/incidents.py`, `frontend/src/pages/IncidentsPage.tsx`, `frontend/src/pages/IncidentDetailPage.tsx`; `backend/tests/test_auth.py`; notes/history fields are present, but full route/state-specific test coverage is incomplete. |
+| FR-028–034 metrics, definitions, labeled evaluation, metadata, breakdowns, comparisons, source labeling | PARTIAL | `backend/app/services/evaluation_metrics.py`, `backend/app/api/v1/evaluations.py`, `backend/app/api/v1/reliability.py`, `frontend/src/pages/EvaluationsPage.tsx`, `frontend/src/pages/ReliabilityPage.tsx`; `backend/tests/test_evaluation_metrics.py`; dataset-backed execution and comparison/breakdown are unavailable until approved fixtures and event detector exist. |
+| FR-035–037 source status, failures, demo identification | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/api/v1/jobs.py`, `frontend/src/pages/SystemStatusPage.tsx`, `frontend/src/components/SourceAdminPanel.tsx`; `backend/tests/test_worker.py`, `frontend/src/components/SourceAdminPanel.test.tsx`; worker liveness is reported unavailable. |
+| FR-038–044 public context, attribution/freshness/separation/bounds/degradation/privacy | PARTIAL | `backend/app/services/tinyfish.py`, `backend/app/services/context_jobs.py`, `backend/app/api/v1/public_context.py`, `backend/app/api/v1/sources.py`, `frontend/src/pages/PublicContextPage.tsx`, `frontend/src/pages/SourceContextPage.tsx`; `backend/tests/test_tinyfish.py`, `backend/tests/test_context_jobs.py`; live provider and cross-process search rate coordination remain unverified/incomplete. |
+| AT-01 ingestion; AT-02 duplicate handling | PARTIAL | `backend/app/services/incidents.py`, `backend/app/db/models.py`; `backend/tests/test_postgres_integrity.py`; database integration requires disposable PostgreSQL. |
+| AT-03 correct evidence; AT-04 missing evidence | PARTIAL | `backend/app/api/v1/evidence.py`, `frontend/src/pages/IncidentDetailPage.tsx`; `backend/tests/test_auth.py`; live storage authorization remains unverified. |
+| AT-05 quality warning; AT-06 uncertainty | PARTIAL | `backend/app/worker.py`, `backend/app/db/models.py`; `backend/tests/test_opencv_models.py`, `backend/tests/test_worker.py`; no event-classifier uncertainty policy is configured. |
+| AT-07 persisted review; AT-08 prediction/review separation | PARTIAL | `backend/app/services/incidents.py`, `backend/app/db/models.py`, `frontend/src/pages/IncidentDetailPage.tsx`; `backend/tests/test_auth.py`; full direct API negative/roundtrip matrix remains. |
+| AT-09 metric correctness; AT-10 insufficient data | PARTIAL | `backend/app/services/evaluation_metrics.py`; `backend/tests/test_evaluation_metrics.py`; currently pure fixture calculations, not persisted detector evaluation runs. |
+| AT-11 direct evidence access control | PARTIAL | `backend/app/api/v1/evidence.py`, `backend/app/main.py`; `backend/tests/test_auth.py`; live signed Storage URL check unavailable. |
+| AT-12 invalid video failure without positive conclusion | PARTIAL | `backend/app/media/uploads.py`, `backend/app/worker.py`; `backend/tests/test_video_uploads.py`, `backend/tests/test_worker.py`; broaden codec/corruption coverage. |
+| AT-13 demo integrity | PARTIAL | `frontend/src/components/SourceAdminPanel.tsx`, `frontend/src/pages/SystemStatusPage.tsx`, `backend/app/api/v1/sources.py`; `frontend/src/components/SourceAdminPanel.test.tsx`; seeded deterministic end-to-end demo fixtures are not present. |
+| AT-14 context provenance/failure isolation; AT-15 provider data boundary | PARTIAL | `backend/app/services/tinyfish.py`, `backend/app/services/context_jobs.py`; `backend/tests/test_tinyfish.py`, `backend/tests/test_context_jobs.py`; tests use mocks, no live TinyFish request. |
+
+### API, database, design and architecture contract trace
+
+| Contract area | Status | Implementation and proof / remaining gate |
+|---|---|---|
+| API auth: login/logout/current user | PARTIAL | `backend/app/api/v1/auth.py`, `backend/app/api/v1/schemas.py`; `backend/tests/test_auth.py`; compare all response/error branches with `API.md` contract tests. |
+| API dashboard | PARTIAL | `backend/app/api/v1/dashboard.py`; route registered in `backend/app/api/v1/router.py`; route-specific contract test coverage is incomplete. |
+| API incidents list/detail/review | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; `backend/tests/test_auth.py`; complete pagination/filter/role contract matrix remains. |
+| API evidence metadata/content | PARTIAL | `backend/app/api/v1/evidence.py`; `backend/tests/test_auth.py`, `backend/tests/test_supabase_storage.py`; live playback and storage policy checks remain. |
+| API sources register/upload/detail/reprocess/context | PARTIAL | `backend/app/api/v1/sources.py`; `backend/tests/test_video_uploads.py`, `backend/tests/test_context_jobs.py`; comprehensive typed response tests and live storage remain. |
+| API jobs/status/health | PARTIAL | `backend/app/api/v1/jobs.py`, `backend/app/main.py`, `backend/app/worker.py`; `backend/tests/test_worker.py`, `backend/tests/test_health.py`; no cancel endpoint/state is specified in `API.md`, so none was invented. |
+| API reliability/evaluations | PARTIAL | `backend/app/api/v1/reliability.py`, `backend/app/api/v1/evaluations.py`; `backend/tests/test_evaluation_metrics.py`; detector-backed evaluation is intentionally unavailable. |
+| API TinyFish Search/Fetch | PARTIAL | `backend/app/api/v1/public_context.py`, `backend/app/services/tinyfish.py`; `backend/tests/test_tinyfish.py`; provider integration uses mocked tests; live secret/provider not configured. |
+| Database entities `users`, `sessions`, `sources`, `evaluation_datasets`, `processing_jobs`, `incidents`, `evidence`, `incident_evidence`, `reliability_assessments`, `reviews`, `evaluation_assets`, `ground_truth_events`, `evaluation_runs`, `metric_results`, `external_context_items`, `audit_events` | CONFIRMED | `backend/app/db/models.py`, `backend/migrations/versions/0001_initial_schema.py`; `backend/tests/test_postgres_integrity.py`; fresh/upgrade/downgrade/invariant tests ran against disposable PostgreSQL earlier; hosted Supabase not run. |
+| Database key constraints, indexes, FKs, state/interval/count/uniqueness rules | PARTIAL | `backend/app/db/models.py`, `backend/migrations/versions/0001_initial_schema.py`; `backend/tests/test_postgres_integrity.py`; no live Supabase migration validation. |
+| Database deletion, ownership, prediction/review/context separation, audit immutability | PARTIAL | `backend/app/db/models.py`, migration, `backend/app/services/audit.py`; `backend/tests/test_postgres_integrity.py`; approval-dependent retention remains configurable and non-destructive. |
+| Design pages: login, dashboard, incident list/detail, reliability, system/sources, evaluation | PARTIAL | `frontend/src/pages/LoginPage.tsx`, `DashboardPage.tsx`, `IncidentsPage.tsx`, `IncidentDetailPage.tsx`, `ReliabilityPage.tsx`, `SystemStatusPage.tsx`, `EvaluationsPage.tsx`; `frontend/src/app/router.tsx`; page-specific visual acceptance review not run. |
+| Design states: loading, empty, error, failed, unavailable, uncertain | PARTIAL | Page/components above plus `frontend/src/components/SourceAdminPanel.tsx`; focused tests in `SourceAdminPanel.test.tsx`, `SetupStatusPage.test.tsx`; comprehensive state transition tests remain. |
+| Design shared system, responsiveness, keyboard, contrast, reduced motion, screen readers | UNVERIFIED | `frontend/src/styles/tokens.css`, `frontend/src/styles/global.css`, reusable `frontend/src/components`; unit tests do not establish viewport or accessibility acceptance; full visual/accessibility review not run. |
+| Architecture modular monolith, repository/data boundary, PostgreSQL, private storage, DB worker, server sessions/CSRF, secret boundary | PARTIAL | `backend/app/db`, `backend/app/storage`, `backend/app/worker.py`, `backend/app/api/v1`, `frontend/src/api`; relevant backend test suite passed; live deployment/provider and independent worker monitoring remain unverified. |
+| Architecture no false incident on failure, idempotent retries, bounded resources, undefined metrics unavailable, no unnecessary services | PARTIAL | `backend/app/worker.py`, `backend/app/services/opencv_models.py`, `backend/app/services/evaluation_metrics.py`, `compose.yaml`; `backend/tests/test_worker.py`, `test_opencv_models.py`, `test_evaluation_metrics.py`; production performance, orphan cleanup, recovery drills remain incomplete. |
+| Architecture release, monitoring, backup/restore, rollback and demo provenance | PARTIAL | `.github/workflows/ci.yml`, `backend/uv.lock`, `frontend/package-lock.json`, `docs/FINAL_VERIFICATION.md`; CI passed on `a42acc0`; no deployment or restore drill, and deterministic seeded demo flow is absent. |
+
+### Traceability follow-up
+
+Highest-value next local work is deterministic, explicitly simulated demo fixtures and end-to-end route/state coverage that never impersonate model output. Then complete missing negative authorization/rate-control cases, accessibility and responsive review, worker/orphan operational recovery, and live service checks when credentials and disposable services are configured. The supplied prompt text omits named Prompts 3 and 4 and ends at the start of Prompt 2; `IMPLEMENTATION_PLAN.md` and the authoritative contracts govern the continuing implementation without inventing the missing prompt wording.
