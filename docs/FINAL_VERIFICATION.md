@@ -1,17 +1,18 @@
 # Final verification status
 
-This repository contains a partial SafeCity implementation. It is not production-ready and does not yet meet the full PRD or endpoint catalogue. Implemented slices include PostgreSQL schema/migrations, session authentication and CSRF, basic incident list/detail/review, simulated-source registration, bounded video upload validation, a private Supabase Storage adapter, job/system/reliability read APIs, and frontend login/incident/reliability/system screens.
+This repository contains a partial SafeCity implementation. It is not production-ready and does not yet meet the full PRD or endpoint catalogue. Implemented slices include PostgreSQL schema/migrations, session authentication and CSRF, incident/review workflows, technical-admin source registration/upload, bounded video upload validation, private Supabase Storage, a PostgreSQL worker, optional CPU object/face-region observations, public-context Search/Fetch, and frontend review/system screens.
 
 ## Verification run
 
 | Area | Result |
 |---|---|
-| Backend Ruff lint | Passed before the final worker timeout-category and CPU-thread-limit edits; Ruff is not installed in the active shell for a rerun. |
-| Backend Ruff format check | Passed before those final worker edits; Ruff is not installed in the active shell for a rerun. |
-| Backend mypy | Passed on 37 source files before those final worker edits; mypy is not installed in the active shell for a rerun. |
-| Backend pytest | 72 passed, 1 skipped before the final worker edits (optional PostgreSQL integration test; no `SAFECITY_TEST_DATABASE_URL` was set). Pytest is not installed in the active shell for a rerun. Starlette emitted one TestClient deprecation warning. |
+| Backend Ruff lint | Passed with the locked backend environment. |
+| Backend Ruff format check | Passed; 49 files formatted. |
+| Backend mypy | Passed; no issues in 37 source files. |
+| Backend pytest | 72 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
+| Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
-| Frontend lint/typecheck/unit tests/build | Passed; Vitest 7 tests. |
+| Frontend lint/typecheck/unit tests/build | Passed; 10 Vitest tests. |
 | Frontend format check | Passed. |
 | OpenAPI route catalogue | Loaded successfully with 25 paths; only a subset of `API.md` endpoints exists. |
 | Docker Compose | `docker compose config -q` passed. No full multi-service app/worker deployment was verified. |
