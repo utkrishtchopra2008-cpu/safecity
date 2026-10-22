@@ -280,6 +280,7 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
     assert login.status_code == 200
     user_id = uuid.UUID(login.json()["user"]["id"])
     job_id = uuid.uuid4()
+    another_users_job_id = uuid.uuid4()
     now = datetime.now(UTC)
     job = SimpleNamespace(
         id=job_id,
@@ -294,6 +295,11 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
         error_summary="Sensitive provider diagnostic",
         result_metadata={"duration_seconds": 1.5, "private_path": "/srv/private/video.mp4"},
     )
+    another_users_job_data = vars(job) | {
+        "id": another_users_job_id,
+        "created_by": uuid.uuid4(),
+    }
+    another_users_job = SimpleNamespace(**another_users_job_data)
 
     factory = auth_client.app.state.test_session_factory
 
@@ -305,7 +311,10 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
             return getattr(self.database, name)
 
         def get(self, _model, requested_id):
-            return job if requested_id == job_id else None
+            return {
+                job_id: job,
+                another_users_job_id: another_users_job,
+            }.get(requested_id)
 
     def job_db() -> Generator[JobDatabase, None, None]:
         with factory() as database:
@@ -314,14 +323,24 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
     monkeypatch.setitem(app.dependency_overrides, get_db, job_db)
 
     response = auth_client.get(f"/api/v1/jobs/{job_id}")
+    unauthorized_job = auth_client.get(f"/api/v1/jobs/{another_users_job_id}")
     hidden_job = auth_client.get(f"/api/v1/jobs/{uuid.uuid4()}")
+    operator_system_status = auth_client.get("/api/v1/system/status")
 
     assert response.status_code == 200
     assert response.json()["result_metadata"] == {"duration_seconds": 1.5}
     assert response.json()["error_code"] is None
     assert response.json()["error_summary"] is None
+    assert unauthorized_job.status_code == 404
+    assert unauthorized_job.json()["code"] == "RESOURCE_NOT_FOUND"
     assert hidden_job.status_code == 404
     assert hidden_job.json()["code"] == "RESOURCE_NOT_FOUND"
+    assert operator_system_status.status_code == 200
+    assert operator_system_status.json() == {
+        "status": "available",
+        "sources": {},
+        "jobs": {},
+    }
 
 
 def test_reliability_route_requires_authentication(auth_client: TestClient) -> None:
