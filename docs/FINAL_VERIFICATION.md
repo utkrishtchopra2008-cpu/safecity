@@ -12,7 +12,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | Backend pytest | 91 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
 | Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
-| Frontend lint/typecheck/unit tests/build | Passed; 11 Vitest tests, including inert rendering of HTML-like TinyFish text. |
+| Frontend lint/typecheck/unit tests/build | Passed; 12 Vitest tests, including the AppShell skip-link/navigation contract and inert rendering of HTML-like TinyFish text. |
 | Frontend format check | Passed. |
 | OpenAPI route catalogue | Loaded successfully with 25 paths; only a subset of `API.md` endpoints exists. |
 | Docker Compose | `docker compose config -q` passed. No full multi-service app/worker deployment was verified. |

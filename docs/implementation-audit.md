@@ -15,7 +15,7 @@ Audit refreshed against the implementation based on `main` commit `5067e76` on 2
 | Compose | PARTIAL | `compose.yaml` defines PostgreSQL, backend, and a single worker service. Worker health reporting and full container startup were not verified. |
 | Environment | PARTIAL | `.env.example` now includes backend-only Supabase Storage placeholders and upload byte/duration limits; actual credentials and deployment policy are unavailable. |
 | Runtime | PARTIAL | Backend checks ran with Python 3.12.15 and `uv.lock`. Local Node is 24.22.0 (outside the project's 22.x engine range); CI uses Node 22.16.0. |
-| Automated tests | PARTIAL | Current backend: 91 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 11 Vitest tests passed. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
+| Automated tests | PARTIAL | Current backend: 91 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 12 Vitest tests passed, including the global shell navigation landmark and skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
 
 ## Risk-ranked gap register
 
@@ -152,7 +152,7 @@ Highest-value next local work is end-to-end route/state coverage that never impe
 
 | Criterion | Status | Evidence / remaining proof |
 |---|---|---|
-| Shared shell, typography, spacing, color tokens; evidence-first presentation | PARTIAL | `frontend/src/components/AppShell.tsx`, `frontend/src/styles/tokens.css`, `global.css`; tablet/mobile header screenshots were checked after the responsive fix, but page-wide visual review remains incomplete. |
+| Shared shell, typography, spacing, color tokens; evidence-first presentation | PARTIAL | `frontend/src/components/AppShell.tsx`, `frontend/src/components/AppShell.test.tsx`, `frontend/src/styles/tokens.css`, `global.css`; tablet/mobile header screenshots were checked after the responsive fix, but page-wide visual review remains incomplete. |
 | Scannable incident table with specified filters | PARTIAL | `frontend/src/pages/IncidentsPage.tsx`; route/UI tests do not establish full pagination/filter coverage. |
 | Detail separates detector output, review and evidence; missing/uncertain explicit | PARTIAL | `frontend/src/pages/IncidentDetailPage.tsx`; component-level accessibility/state proof incomplete. |
 | Reliability metrics show context and qualified availability | PARTIAL | `frontend/src/pages/ReliabilityPage.tsx`, backend reliability API; no full screenshot review. |
