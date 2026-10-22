@@ -220,6 +220,55 @@ def test_source_detail_and_processing_routes_require_authentication(
     assert refresh.status_code == 401
 
 
+def test_operator_can_list_sources_and_missing_source_is_not_found(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+
+    class EmptySourceQuery:
+        def order_by(self, *_args):
+            return self
+
+        def limit(self, _count):
+            return []
+
+    factory = auth_client.app.state.test_session_factory
+
+    class ReadOnlyDatabase:
+        def __init__(self, database: OrmSession) -> None:
+            self.database = database
+
+        def __getattr__(self, name):
+            return getattr(self.database, name)
+
+        def execute(self, *args, **kwargs):
+            return self.database.execute(*args, **kwargs)
+
+        def query(self, _model):
+            return EmptySourceQuery()
+
+        def get(self, _model, _source_id):
+            return None
+
+    def empty_source_db() -> Generator[ReadOnlyDatabase, None, None]:
+        with factory() as database:
+            yield ReadOnlyDatabase(database)
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, empty_source_db)
+
+    listing = auth_client.get("/api/v1/sources")
+    detail = auth_client.get(f"/api/v1/sources/{uuid.uuid4()}")
+
+    assert listing.status_code == 200
+    assert listing.json() == []
+    assert detail.status_code == 404
+    assert detail.json()["code"] == "RESOURCE_NOT_FOUND"
+
+
 def test_reliability_route_requires_authentication(auth_client: TestClient) -> None:
     response = auth_client.get("/api/v1/reliability/summary")
 

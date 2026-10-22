@@ -15,7 +15,7 @@ Audit refreshed against the implementation based on `main` commit `5067e76` on 2
 | Compose | PARTIAL | `compose.yaml` defines PostgreSQL, backend, and a single worker service. Worker health reporting and full container startup were not verified. |
 | Environment | PARTIAL | `.env.example` now includes backend-only Supabase Storage placeholders and upload byte/duration limits; actual credentials and deployment policy are unavailable. |
 | Runtime | PARTIAL | Backend checks ran with Python 3.12.15 and `uv.lock`. Local Node is 24.22.0 (outside the project's 22.x engine range); CI uses Node 22.16.0. |
-| Automated tests | PARTIAL | Current backend: 91 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 12 Vitest tests passed, including the global shell navigation landmark and skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
+| Automated tests | PARTIAL | Current backend: 92 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 12 Vitest tests passed, including the global shell navigation landmark and skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
 
 ## Risk-ranked gap register
 
@@ -105,7 +105,7 @@ Statuses below describe implemented proof, not a claim that the entire parent re
 | `POST /api/v1/incidents/{incident_id}/reviews` | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; auth-gate coverage exists; successful atomic review persistence and rollback route tests remain. |
 | `GET /api/v1/incidents/{incident_id}/reviews` | NOT PRESENT | API.md marks review history retrieval optional when supported; no route is implemented. The current incident detail exposes available current review state. |
 | `GET /api/v1/evidence/{evidence_id}` and `/content` | PARTIAL | `backend/app/api/v1/evidence.py`; unauthenticated denial and adapter signing tests exist; successful authorized resource access is not covered end-to-end. |
-| `GET /api/v1/sources` and `GET /api/v1/sources/{source_id}` | PARTIAL | `backend/app/api/v1/sources.py`; source lookup/list code exists; positive response and visibility contract tests remain. |
+| `GET /api/v1/sources` and `GET /api/v1/sources/{source_id}` | PARTIAL | `backend/app/api/v1/sources.py`; `backend/tests/test_auth.py` now proves an authenticated operator receives an empty list and an unknown source gets the standardized 404; non-empty field serialization and broader visibility tests remain. |
 | `POST /api/v1/sources` | PARTIAL | `backend/app/api/v1/sources.py`; `backend/tests/test_auth.py` proves operator denial; admin success response and audit coverage remain incomplete. |
 | `POST /api/v1/sources/upload` | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/media/uploads.py`; streaming/signature tests exist; full route transaction/storage failure tests remain. |
 | `POST /api/v1/sources/{source_id}/process` | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/worker.py`; current route coverage verifies auth; reprocess success/idempotency contract needs route tests. |
