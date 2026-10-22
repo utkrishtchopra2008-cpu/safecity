@@ -23,6 +23,8 @@ This repository contains a partial SafeCity implementation. It is not production
 
 ## Operational constraints and remaining requirements
 
+- Optional local walkthrough fixture: after applying migrations, from `backend/` run `uv run python -m app.cli.seed_demo --apply` with `APP_ENV=development` and a development-only `DATABASE_URL`. It refuses shared/production modes and adds a plainly labelled synthetic sample with no detector score or reliability claim. See `docs/demo-data.md`.
+
 - Apply `backend/migrations` to a configured PostgreSQL database before running authenticated workflows. Use backend-only `DATABASE_URL`; configure Supabase URL/service role and private bucket for video uploads.
 - `docs/supabase-storage.md` documents the deny-by-default Storage policy path. These policies have not been applied or tested against a live project. Backend resource checks remain required because a service-role key bypasses RLS.
 - A single PostgreSQL worker claims jobs, recovers expired leases, retries bounded transient storage failures, and records OpenCV video-quality measurements plus optional object/face-region observations. The generated AVI exercised the real CPU model path. It creates no incidents. Worker liveness is not reported by the API (`worker: not_reported`).
