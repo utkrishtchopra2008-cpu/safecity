@@ -10,7 +10,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - safecity-postgres-data:/var/lib/postgresql/data
-    healthcheck;
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
@@ -26,6 +26,18 @@ services:
       PUBLIC_APP_ORIGIN: ${PUBLIC_APP_ORIGIN:-http://localhost:5173}
     ports:
       - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-safecity_dev}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-safecity_dev}
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.worker"]
     depends_on:
       postgres:
         condition: service_healthy

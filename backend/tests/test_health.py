@@ -12,11 +12,12 @@ def test_liveness_reports_alive() -> None:
     assert response.json() == {"status": "alive"}
 
 
-def test_readiness_does_not_claim_database_was_probed() -> None:
+def test_readiness_reports_database_not_configured_without_claiming_ready() -> None:
     response = client.get("/health/ready")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
-    assert body["status"] == "ready"
+    assert body["status"] == "not_ready"
     assert body["checks"]["configuration"] == "valid"
-    assert body["checks"]["database"] in {"configured_not_probed", "not_configured_yet"}
+    assert body["checks"]["database"] == "not_configured"
+    assert body["checks"]["worker"] == "not_reported"

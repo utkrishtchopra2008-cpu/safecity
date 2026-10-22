@@ -21,6 +21,7 @@ node_modules/
 frontend/dist/
 frontend/coverage/
 frontend/.vite/
+!frontend/package-lock.json
 
 # Local database/media/temporary data
 .data/

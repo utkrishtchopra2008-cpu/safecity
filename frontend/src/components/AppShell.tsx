@@ -18,6 +18,15 @@ export function AppShell() {
           </span>
         </Link>
         <span className="environment-badge">FOUNDATION</span>
+        <nav className="primary-nav" aria-label="Primary navigation">
+          <Link to="/dashboard">Dashboard</Link>
+          <Link to="/incidents">Candidate events</Link>
+          <Link to="/reliability">Reliability</Link>
+          <Link to="/evaluations">Evaluations</Link>
+          <Link to="/public-context">Public context</Link>
+          <Link to="/system">System</Link>
+          <Link to="/login">Sign in</Link>
+        </nav>
       </header>
       <main id="main-content" className="main-content" tabIndex={-1}>
         <Outlet />

@@ -708,9 +708,7 @@ Define a small storage interface supporting:
 - Delete an object when an approved retention or cleanup operation requires it.
 - Optionally calculate or verify an integrity checksum.
 
-Implement local filesystem storage for development and a controlled MVP deployment when durable local storage is available.
-
-If the deployment environment does not provide durable local storage, select an appropriate object-storage implementation before real evidence is uploaded.
+Implement local filesystem storage only for private development data. Production evidence uses the configured private Supabase Storage bucket through a backend-only adapter; the service-role credential never reaches the browser. The backend remains responsible for authorization because service-role requests bypass Storage RLS.
 
 ### 7.3 Storage Key Safety
 
@@ -727,7 +725,7 @@ The backend must authorize evidence access before returning protected media.
 
 For local or application-managed storage, stream the evidence through an authenticated endpoint. Support byte-range requests when required for practical video seeking.
 
-If object storage is adopted later, short-lived signed URLs may be used following authorization, provided their expiration, scope, and access implications are acceptable.
+For Supabase Storage, short-lived signed URLs may be used only after backend resource and role authorization. Bound their lifetime, scope each URL to one object, and do not log or persist the URL.
 
 Do not expose permanent public URLs for sensitive evidence.
 
@@ -774,6 +772,8 @@ For production:
 - Invalidate sessions on logout and account deactivation.
 
 Use a maintained password-hashing implementation with Argon2id where compatible with the selected authentication library.
+
+The implementation uses Argon2id and configures an eight-hour absolute session lifetime with a thirty-minute idle timeout by default. Both are backend settings. Cookie-authenticated writes require a session-derived HMAC CSRF token and an allowlisted Origin/Referer; production config must provide the HMAC secret.
 
 ### 8.3 CSRF Protection
 

@@ -7,27 +7,30 @@ import { API_BASE_URL } from '../api/client';
 
 const foundationItems = [
   {
-    title: 'Frontend shell and routes',
-    detail: 'React, TypeScript, Vite, and shared design tokens are configured.',
-    status: 'Ready',
+    title: 'Session sign-in and CSRF protection',
+    detail:
+      'The API uses server-managed sessions; browser state does not store credentials or session tokens.',
+    status: 'Implemented',
     ready: true,
   },
   {
-    title: 'Backend liveness',
-    detail: 'The FastAPI service exposes /health/live and /health/ready.',
-    status: 'Scaffolded',
+    title: 'Candidate-event review',
+    detail: 'Incident list, detail, and human review use typed API routes.',
+    status: 'Partial',
     ready: true,
   },
   {
-    title: 'Database and application workflows',
-    detail: 'Persistence, authentication, incidents, and video processing are planned next.',
-    status: 'Not implemented',
+    title: 'Private upload and processing',
+    detail:
+      'Video upload validation and job creation are implemented; a background worker is not yet running.',
+    status: 'Queued only',
     ready: false,
   },
   {
-    title: 'TinyFish public context',
-    detail: 'Configuration is present but disabled. No provider request is made by this scaffold.',
-    status: 'Disabled by default',
+    title: 'Detector, evaluation, and public context',
+    detail:
+      'No approved detector artifact or evaluation dataset is present; TinyFish workflows are not implemented.',
+    status: 'Unavailable',
     ready: false,
   },
 ] as const;
@@ -37,8 +40,8 @@ export function SetupStatusPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Workspace setup"
-        title="Foundation is in place"
-        description="The application shell is ready for the next implementation phase. Operational workflows are not enabled in this setup build."
+        title="Implementation status"
+        description="SafeCity AI has working authentication and candidate-event review foundations. Processing, evaluation, and several operational screens remain unavailable."
       />
 
       <Surface className="intro-surface">
@@ -52,14 +55,17 @@ export function SetupStatusPage() {
             evidence, uncertainty, and clear provenance. A model output is not a human conclusion.
           </p>
         </div>
-        <StatusBadge tone="info">Foundation only</StatusBadge>
+        <StatusBadge tone="info">Partial implementation</StatusBadge>
       </Surface>
 
       <section aria-labelledby="setup-checklist-heading" className="section-stack">
         <div className="section-heading">
           <div>
             <h2 id="setup-checklist-heading">Setup checklist</h2>
-            <p>These states describe the scaffold, not live surveillance or processing status.</p>
+            <p>
+              These states describe implemented capability, not live surveillance or detector
+              performance.
+            </p>
           </div>
         </div>
         <div className="checklist">
@@ -106,8 +112,8 @@ export function SetupStatusPage() {
           </div>
         </dl>
         <p className="surface-footnote">
-          Next step: connect the database and validate the backend development loop before adding
-          feature endpoints.
+          Uploads remain queued until a worker is deployed. No live detector or reliability metric
+          is currently available.
         </p>
         <a
           className="text-link"

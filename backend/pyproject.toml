@@ -5,8 +5,12 @@ description = "FastAPI foundation for the SafeCity AI incident intelligence plat
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "alembic==1.20.0",
+  "argon2-cffi==25.1.0",
   "fastapi==0.156.4",
+  "email-validator==2.3.0",
   "httpx==0.28.1",
+  "opencv-python-headless==4.12.0.88",
+  "python-multipart==0.0.20",
   "psycopg[binary]>=3.2,<4.0",
   "pydantic==2.14.1",
   "sqlalchemy==2.0.55",
@@ -34,6 +38,14 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/v1/auth.py" = ["B008"]
+"app/api/v1/incidents.py" = ["B008"]
+"app/api/v1/sources.py" = ["B008"]
+"app/api/v1/jobs.py" = ["B008"]
+"app/api/v1/reliability.py" = ["B008"]
+"app/api/v1/dashboard.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

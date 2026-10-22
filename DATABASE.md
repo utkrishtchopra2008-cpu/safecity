@@ -528,6 +528,24 @@ Stores bounded, attributed public-web context retrieved for an approved source a
 - Keep summary length bounded. Do not store complete page content, session state, browser storage, cookies, or user credentials unless a separately approved need requires a documented change.
 - Freshness status is derived from stale_after and retrieval metadata; distinguish stale from unknown rather than silently refreshing the timestamp.
 
+### 4.16 audit_events
+
+Stores append-only security-significant actions without credentials or raw request payloads.
+
+| Column | Type | Nullable | Rules / purpose |
+|---|---|---|---|
+| id | UUID | No | Primary key |
+| actor_user_id | UUID | Yes | FK to users.id with ON DELETE SET NULL |
+| actor_role | VARCHAR(32) | No | Role at the time of the event, or `anonymous` |
+| action | VARCHAR(80) | No | Stable action key such as `auth.login` |
+| object_type | VARCHAR(80) | No | Resource category, not sensitive resource contents |
+| object_id | VARCHAR(200) | Yes | Safe resource identifier where available |
+| occurred_at | TIMESTAMPTZ | No | Default current timestamp |
+| result | VARCHAR(24) | No | CHECK: success, denied, failure |
+| correlation_id | VARCHAR(100) | Yes | Request/job correlation identifier |
+
+The PostgreSQL migration rejects UPDATE and DELETE statements with a trigger. Application code only inserts audit events. Audit rows must not contain passwords, raw session tokens, provider secrets, signed URLs, media, personal search input, or unfiltered exception text. Retention remains governed by the approved institutional policy.
+
 ---
 
 ## 5. Relationships and Delete Rules
@@ -687,6 +705,8 @@ A source, dataset, incident, or evidence record is not private solely because it
 ### 8.3 Row-Level Security (RLS)
 
 **MVP decision: PostgreSQL RLS is not required for the initial single-institution deployment.**
+
+For Supabase Storage, the `safecity-evidence` bucket is private and direct `anon`/`authenticated` access is denied by the policies in `docs/supabase-storage.md`. The backend service-role key bypasses these policies; backend session, role, and resource checks are mandatory. The application database continues to use the backend authorization boundary described above and does not rely on Supabase Auth JWT claims.
 
 Reasons:
 

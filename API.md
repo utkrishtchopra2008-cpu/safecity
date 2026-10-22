@@ -142,6 +142,8 @@ The login flow is:
 
 The raw session token MUST NOT be stored in the database or exposed through API response JSON.
 
+The implementation hashes passwords with Argon2id and generates 256-bit random session tokens. The initial configurable session defaults are an eight-hour absolute expiry and a thirty-minute idle expiry. The database stores only the SHA-256 token hash; every protected request checks expiry, revocation, idle time, and active-user state.
+
 ### 3.2 Cookie Requirements
 
 Production session cookies must use:
@@ -160,6 +162,10 @@ Because authentication uses cookies, state-changing requests must be protected a
 Use a documented CSRF-token mechanism and appropriate origin validation.
 
 If a CSRF token is returned to the frontend, it must not contain the session token or another reusable authentication secret. Validate the token on protected state-changing requests.
+
+The implementation returns a per-session HMAC CSRF token from `GET /api/v1/auth/csrf`. The frontend sends it in `X-CSRF-Token` for state-changing requests other than login. The backend also requires the request Origin (or Referer origin) to match `PUBLIC_APP_ORIGIN` or `CSRF_ALLOWED_ORIGINS`. Production must configure a random `SESSION_CSRF_SECRET` of at least 32 characters. Authentication responses are sent with `Cache-Control: no-store`.
+
+Authentication outcomes are written to the append-only audit table with actor (when known), action, object reference, result, timestamp, and request correlation ID. Credentials, emails, session tokens, source IP addresses, and request bodies are not stored in these audit events.
 
 ### 3.4 Roles
 
@@ -513,10 +519,12 @@ The caller must be authorized for the source, and the source must have `context_
 
 Request fields may include:
 
-- `topics`: optional subset of `weather_advisory`, `transport_disruption`, `public_notice`, `public_event`, `emergency_advisory`, and `other`.
+- `topics`: optional subset of up to three configured topics from `weather_advisory`, `transport_disruption`, `public_notice`, `public_event`, `emergency_advisory`, and `other`.
 - `time_window_hours`: integer from 1 to 168, default 24.
 
 The backend derives the search query from the stored approved area and allowlisted topics, enforces result limits/cooldowns, and creates a `context_enrichment` job. Return 202 Accepted with `source_id`, `job_id`, and `status`. The job result is retrieved through the existing job and context-list endpoints; do not hold the HTTP request open while TinyFish executes.
+
+The worker caps a refresh at three topics, five bounded page fetches, and 150 seconds of provider work; a nonempty configured TinyFish allowlist and backend secret are required. Completed empty searches remain completed with zero saved items; provider or configuration failures become failed jobs. Duplicate context rows use the source/dedupe constraint and do not change detector/review state.
 
 #### Context list response
 
@@ -614,9 +622,20 @@ Supported metrics include:
 
 Do not report review time as available merely because reviews exist; the current database schema does not itself define a reliable review-duration measurement.
 
+The current calculation module's `exact_category_positive_interval_overlap_one_to_one_v1` rule only matches predictions and reference events with an exact category and positive temporal overlap. It computes a maximum-cardinality one-to-one match; ties prefer greater overlap, earlier predictions, then stable input order. Repeated/unmatched predictions count as false alerts and unmatched reference events count as misses. Detection delay is the nonnegative difference from reference onset to matched prediction onset. This implementation rule is versioned in `backend/app/services/evaluation_metrics.py`; it does not establish that a detector or evaluation run is available.
+
 Metrics calculated from a labeled evaluation must be identified as evaluation results. Operational metrics based on human-reviewed data must use a documented methodology and must not be silently substituted for benchmark results. TinyFish public-context items are not detector predictions or ground-truth labels and must not enter precision, recall, false-alert-rate, or detection-delay calculations by default.
 
 Undefined values must be null with an appropriate availability status, never a misleading zero.
+
+#### Public context search
+
+| Method | Endpoint | Purpose | Access |
+|---|---|---|---|
+| POST | /api/v1/public-context/search | Search approved public sources | Authenticated, CSRF-protected |
+| POST | /api/v1/public-context/fetch | Fetch a selected search result as Markdown | Authenticated, CSRF-protected |
+
+The search request has a 3–240 character query and one topic from the database topic enum. The backend sends the query only to TinyFish Search using the backend-only key and configured allowlisted domains. Results include title, snippet, source attribution, publication time when supplied, retrieval time, and freshness (`current`, `stale`, or `unknown`). A successful empty result is explicitly `empty`; it is not a claim that an area is safe. Provider errors return `PUBLIC_CONTEXT_UNAVAILABLE` and do not affect video processing or review. Requests are limited per user. Fetch accepts only a URL returned in that user's recent Search response, revalidates HTTPS and the configured public-domain allowlist, rejects query strings/fragments and personal-data patterns, and revalidates TinyFish's final URL. It returns only a bounded Markdown excerpt. Both operations use the documented TinyFish Search and Fetch REST fields ([Search reference](https://docs.tinyfish.ai/search-api/reference), [Fetch reference](https://docs.tinyfish.ai/fetch-api/reference)). Search results are external context, never detector or review evidence.
 
 ---
 
@@ -652,6 +671,8 @@ The backend must create a processing job and an associated evaluation run consis
 The linked job must be of type evaluation and reference the same dataset. If the records cannot be created consistently, the transaction must fail or leave an explicitly recoverable state.
 
 Return 202 Accepted with the evaluation ID and processing-job ID.
+
+Current implementation note: list/detail endpoints are available with bounded pagination and operator ownership checks. Creation returns `503 DETECTOR_UNAVAILABLE` until a verified detector adapter and model artifact are configured; it does not create placeholder runs or fabricated metrics.
 
 #### Evaluation response
 
@@ -763,6 +784,9 @@ Use stable machine-readable codes, such as:
 - EVIDENCE_UNAVAILABLE
 - PROCESSING_FAILED
 - DEPENDENCY_UNAVAILABLE
+- PUBLIC_CONTEXT_UNAVAILABLE
+- PUBLIC_QUERY_INVALID
+- PUBLIC_URL_INVALID
 - RATE_LIMIT_EXCEEDED
 - INTERNAL_ERROR
 
@@ -978,6 +1002,8 @@ If the application is deployed across multiple web instances, use a shared rate-
 
 Do not introduce Redis solely to implement rate limiting before a multi-instance requirement exists.
 
+The initial in-process login limiter counts attempts per normalized account and per source IP (10 per account and 30 per IP within 60 seconds). It is process-local and resets on restart; a multi-instance deployment must apply the documented trusted-proxy/shared limiting boundary.
+
 ### 9.4 Rate-Limit Response
 
 When a limit is exceeded, return 429 Too Many Requests with a safe error body.
@@ -1003,6 +1029,8 @@ Only variables required by the selected implementation should be enabled. No sec
 | APP_ENV | Yes | Select development, test, staging, or production behavior |
 | DATABASE_URL | Yes | PostgreSQL connection string; secret |
 | SESSION_TTL_SECONDS | Yes | Session lifetime |
+| SESSION_IDLE_TTL_SECONDS | Yes | Idle timeout; must not exceed absolute session lifetime |
+| SESSION_CSRF_SECRET | Yes in production | At least 32 random characters; HMAC key for CSRF tokens |
 | COOKIE_SECURE | Yes | Require secure cookies in production |
 | COOKIE_SAMESITE | Yes | Session-cookie SameSite policy |
 | CSRF_ALLOWED_ORIGINS | Yes for cookie-authenticated browser deployments | Approved origins for state-changing browser requests |
@@ -1011,6 +1039,10 @@ Only variables required by the selected implementation should be enabled. No sec
 | LOCAL_MEDIA_ROOT | Yes when local storage is used | Private media-storage directory |
 | STORAGE_BACKEND | Yes | Select the configured storage implementation |
 | MAX_UPLOAD_BYTES | Yes when uploads are supported | Maximum permitted upload size |
+| MAX_UPLOAD_DURATION_SECONDS | Yes when video uploads are supported | Maximum decoded video duration |
+| SUPABASE_URL | Required when Supabase Storage is selected | Backend-only project URL; HTTPS required |
+| SUPABASE_SERVICE_ROLE_KEY | Required when Supabase Storage is selected | Private backend secret; never expose to Vite or the browser |
+| SUPABASE_STORAGE_BUCKET | Required when Supabase Storage is selected | Private evidence bucket name; public access disabled |
 | DETECTOR_BACKEND | Yes when detection is enabled | Select installed detector or simulated implementation |
 | DETECTOR_VERSION | Yes when a detector is selected | Version identifier for reproducibility |
 | WORKER_POLL_INTERVAL_SECONDS | Yes for database polling worker | Delay between job-queue checks |

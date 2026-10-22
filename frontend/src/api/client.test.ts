@@ -59,4 +59,52 @@ describe('requestJson', () => {
       code: 'NETWORK_ERROR',
     });
   });
+
+  it('fetches and sends the CSRF token for state-changing requests', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ csrf_token: 'csrf-test-token' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ saved: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      requestJson<{ saved: boolean }>('/incidents/1/reviews', { method: 'POST', body: '{}' }),
+    ).resolves.toEqual({ saved: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/\/api\/v1\/auth\/csrf$/),
+      expect.objectContaining({ method: 'GET', credentials: 'include' }),
+    );
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ headers: expect.any(Headers), credentials: 'include' }),
+    );
+    const requestHeaders = new Headers(fetchMock.mock.calls[1]?.[1]?.headers);
+    expect(requestHeaders.get('X-CSRF-Token')).toBe('csrf-test-token');
+  });
+
+  it('does not request a CSRF token before login', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ user: { role: 'operator' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await requestJson('/auth/login', { method: 'POST', body: '{}' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/\/api\/v1\/auth\/login$/);
+  });
 });
