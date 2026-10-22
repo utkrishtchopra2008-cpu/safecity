@@ -15,7 +15,7 @@ Audit refreshed against `main` commit `a42acc0` on 2026-10-23. Product requireme
 | Compose | PARTIAL | `compose.yaml` defines PostgreSQL, backend, and a single worker service. Worker health reporting and full container startup were not verified. |
 | Environment | PARTIAL | `.env.example` now includes backend-only Supabase Storage placeholders and upload byte/duration limits; actual credentials and deployment policy are unavailable. |
 | Runtime | PARTIAL | Backend checks ran with Python 3.12.15 and `uv.lock`. Local Node is 24.22.0 (outside the project's 22.x engine range); CI uses Node 22.16.0. |
-| Automated tests | PARTIAL | Current backend: 90 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 11 Vitest tests passed. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
+| Automated tests | PARTIAL | Current backend: 91 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 11 Vitest tests passed. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
 
 ## Risk-ranked gap register
 
@@ -109,7 +109,7 @@ Statuses below describe implemented proof, not a claim that the entire parent re
 | `POST /api/v1/sources` | PARTIAL | `backend/app/api/v1/sources.py`; `backend/tests/test_auth.py` proves operator denial; admin success response and audit coverage remain incomplete. |
 | `POST /api/v1/sources/upload` | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/media/uploads.py`; streaming/signature tests exist; full route transaction/storage failure tests remain. |
 | `POST /api/v1/sources/{source_id}/process` | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/worker.py`; current route coverage verifies auth; reprocess success/idempotency contract needs route tests. |
-| `GET /api/v1/sources/{source_id}/context`, `POST .../context-refresh` | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/services/context_jobs.py`; `backend/tests/test_context_jobs.py` tests service/database dedupe; route role/resource success cases remain. |
+| `GET /api/v1/sources/{source_id}/context`, `POST .../context-refresh` | PARTIAL | `backend/app/api/v1/sources.py`, `backend/app/services/context_jobs.py`; `backend/tests/test_context_jobs.py` covers both simulated and uploaded source context enrichment with database dedupe; route role/resource success cases remain. |
 | `GET /api/v1/jobs/{job_id}` and `/api/v1/system/status` | PARTIAL | `backend/app/api/v1/jobs.py`; current tests prove auth gate and worker services; typed authorization-filtered output contract tests remain. |
 | `GET /health/live` and `/health/ready` | PARTIAL | `backend/app/main.py`; `backend/tests/test_health.py` covers liveness and configuration/database readiness; storage reports configuration, worker liveness remains `not_reported`, and optional provider reports configured/disabled rather than live verification. |
 | `GET /api/v1/reliability/summary` | PARTIAL | `backend/app/api/v1/reliability.py`; metric service tests verify definitions; route filters/response-source contract tests remain. |

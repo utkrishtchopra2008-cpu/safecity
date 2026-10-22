@@ -7,6 +7,7 @@
 - Preserve separate immutable detector output, quality/reliability assessment, human review, and public context (`PRD.md`, `DATABASE.md`).
 - Do not implement recognition, identity tracking, person-level risk scoring, accusation, punishment, or dispatch (`AGENTS.md`, `PRD.md` §2.2).
 - Treat TinyFish as optional public-web context only. It cannot consume video/evidence or affect detection/review; missing credentials must not block core flows (`AGENTS.md`, `API.md` §8.2).
+- Allow source-level public context on an uploaded clip only after the technical administrator enables it with a coarse area label; because the upload schema has no topic field, configure only the documented `public_notice` default. Context remains separate from the video and cannot consume media.
 - Keep retention configurable; the PRD marks destructive retention behavior approval-dependent. No automatic deletion policy is inferred.
 
 ## Safe implementation choices resolved by the architecture
@@ -14,7 +15,7 @@
 - Keep the modular monolith and a PostgreSQL-backed worker; do not add Redis/Celery or a second auth provider.
 - Keep local development storage outside the public tree and place Supabase Storage behind a server adapter when selected. Server-generated keys and backend authorization remain required even with a privileged service credential.
 - Keep event classification unavailable: the selected models detect COCO object classes and face regions only. They do not implement an incident/event taxonomy; no incident prediction or evaluation is manufactured from these outputs.
-- The worker performs bounded OpenCV quality sampling for uploaded clips and bounded TinyFish Search/Fetch for explicitly enabled simulated sources. It creates no incident predictions; evaluation jobs fail safely until a verified detector/evaluation handler exists.
+- The worker performs bounded OpenCV quality sampling for uploaded clips and bounded TinyFish Search/Fetch for explicitly enabled sources. Uploaded clips use only the documented `public_notice` context topic because the upload contract has no topic field. Context never receives video/evidence and creates no incident predictions; evaluation jobs fail safely until a verified detector/evaluation handler exists.
 - Use the existing framework, package managers and pinned frontend dependencies. Do not upgrade major versions or add an unsupported provider/model.
 - Treat unavailable/null metric values as unavailable, never as zero; persist provenance needed to reproduce actual calculations.
 - Apply the API.md single-instance starting limits to source registration/upload/processing and evaluation creation using bounded in-process sliding windows. They are intentionally not represented as distributed enforcement; multi-instance deployment needs a trusted proxy/shared limiter.

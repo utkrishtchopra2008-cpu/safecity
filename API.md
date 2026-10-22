@@ -479,6 +479,8 @@ Fields:
 - Optional `context_area_label`: coarse, approved public area label; never a private address or personal location.
 - Optional `context_retrieval_enabled`: boolean, default `false`; only enabled after the area and source policy are approved.
 
+When an uploaded clip enables source-level context, the initial configured topic is `public_notice`; the context-refresh request may select only topics configured for that source. This default avoids adding an unconfigured topic field to the upload form.
+
 The endpoint must validate the file size, supported format, actual content, and decoding feasibility where practical.
 
 It must create the required source and evidence metadata and enqueue processing without keeping the HTTP request open throughout inference.

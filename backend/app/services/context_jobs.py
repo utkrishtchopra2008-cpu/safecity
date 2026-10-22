@@ -51,7 +51,6 @@ async def process_context_job(
         enabled = source.context_retrieval_enabled
         if (
             not enabled
-            or source.source_type != "simulated"
             or not isinstance(area, str)
             or not isinstance(requested_topics, list)
             or not isinstance(approved_topics, list)

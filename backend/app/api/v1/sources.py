@@ -284,11 +284,7 @@ def enqueue_source_context_refresh(
         source = database.scalar(select(Source).where(Source.id == source_id).with_for_update())
         if source is None:
             raise HTTPException(status_code=404, detail="RESOURCE_NOT_FOUND")
-        if (
-            not source.context_retrieval_enabled
-            or not source.context_area_label
-            or source.source_type != "simulated"
-        ):
+        if not source.context_retrieval_enabled or not source.context_area_label:
             raise HTTPException(status_code=409, detail="RESOURCE_CONFLICT")
         approved_topics = source.configuration.get("context_topics", [])
         if not isinstance(approved_topics, list) or not approved_topics:
@@ -369,6 +365,10 @@ async def upload_source(
     _enforce_user_limit(source_create_limiter, context.user.id)
     if context_retrieval_enabled and not context_area_label:
         raise HTTPException(status_code=422, detail="VALIDATION_ERROR")
+    if context_retrieval_enabled and not all(
+        char.isalpha() or char.isspace() or char in "-," for char in context_area_label or ""
+    ):
+        raise HTTPException(status_code=422, detail="VALIDATION_ERROR")
     if settings.storage_backend != "supabase" or not settings.supabase_configured:
         raise HTTPException(status_code=503, detail="DEPENDENCY_UNAVAILABLE")
     try:
@@ -401,7 +401,9 @@ async def upload_source(
             status="processing",
             context_area_label=context_area_label,
             context_retrieval_enabled=context_retrieval_enabled,
-            configuration={},
+            configuration={
+                "context_topics": ["public_notice"] if context_retrieval_enabled else []
+            },
             created_by=context.user.id,
         )
         evidence = Evidence(

@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -30,8 +31,9 @@ def _factory() -> tuple[sessionmaker[Session], object]:
     return sessionmaker(bind=engine, expire_on_commit=False), engine
 
 
+@pytest.mark.parametrize("source_type", ["simulated", "uploaded_clip"])
 def test_source_context_job_persists_bounded_attributed_items_idempotently(
-    monkeypatch,
+    monkeypatch, source_type: str
 ) -> None:
     factory, engine = _factory()
     source_id, first_job_id, second_job_id = uuid4(), uuid4(), uuid4()
@@ -41,7 +43,7 @@ def test_source_context_job_persists_bounded_attributed_items_idempotently(
             Source(
                 id=source_id,
                 name="Downtown demo source",
-                source_type="simulated",
+                source_type=source_type,
                 status="ready",
                 context_area_label="Downtown",
                 context_retrieval_enabled=True,
