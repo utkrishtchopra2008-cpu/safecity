@@ -107,4 +107,30 @@ describe('requestJson', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toMatch(/\/api\/v1\/auth\/login$/);
   });
+
+  it('leaves multipart content type to the browser so its boundary is preserved', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ csrf_token: 'csrf-upload' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ job_id: 'job-test' }), {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const body = new FormData();
+    body.set('name', 'test clip');
+
+    await requestJson('/sources/upload', { method: 'POST', body });
+
+    const requestHeaders = new Headers(fetchMock.mock.calls[1]?.[1]?.headers);
+    expect(requestHeaders.get('Content-Type')).toBeNull();
+    expect(requestHeaders.get('X-CSRF-Token')).toBe('csrf-upload');
+  });
 });

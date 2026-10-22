@@ -14,9 +14,9 @@ describe('SetupStatusPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Implementation status' })).toBeInTheDocument();
     expect(screen.getByText('Partial implementation')).toBeInTheDocument();
-    expect(screen.getByText('Queued only')).toBeInTheDocument();
-    expect(screen.getByText('Unavailable')).toBeInTheDocument();
-    expect(screen.getByText('TinyFish — disabled')).toBeInTheDocument();
+    expect(screen.getByText('Configuration required')).toBeInTheDocument();
+    expect(screen.getByText('TinyFish — optional backend configuration')).toBeInTheDocument();
+    expect(screen.getAllByText('Partial', { selector: '.status-badge' })).toHaveLength(2);
     expect(screen.getByText('No video source connected')).toBeInTheDocument();
   });
 });

@@ -37,6 +37,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-safecity_dev}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-safecity_dev}
+      DETECTOR_MODEL_DIR: /models
+    volumes:
+      - ./.data/models:/models:ro
     command: ["uv", "run", "--no-sync", "python", "-m", "app.worker"]
     depends_on:
       postgres:

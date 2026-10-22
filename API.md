@@ -574,6 +574,8 @@ Include:
 
 Do not expose stack traces, raw exception contents, private paths, or other users' job data.
 
+For `source_processing`, an authorized job owner or technical administrator may receive bounded measured video-quality fields and, when `DETECTOR_BACKEND=opencv_zoo`, object-observation summaries with detector/version/taxonomy provenance. Object summaries contain only class, sample count, and mean model score; no bounding boxes or frame bytes are returned. Face-region output is a count only. These values are observations, not incident classifications, proof that an event occurred, or reliability metrics. A successful job with no object observations does not establish that no incident occurred. Result keys are allowlisted by the API; private storage paths and arbitrary worker metadata are never serialized.
+
 #### Health checks
 
 /health/live answers whether the application process is running.

@@ -245,7 +245,7 @@ Make source creation and long-running processing jobs durable before implementin
 Deliver a complete backend video-processing path while preserving uncertainty and evidence provenance.
 
 ### Features and tasks
-1. Select one approved detector implementation and supported event categories; until selected, use a deterministic, clearly labeled simulator.
+1. Use only the pinned YOLOX-S and YuNet adapters for object/face-region observations when configured. These do not classify incidents. Keep event detection unavailable until a compatible event detector and supported category taxonomy are approved; any demonstration flow must remain explicitly DEMO.
 2. Define a typed detector interface independent of the model implementation.
 3. Decode the approved clip, run supported video-quality checks, and normalize candidate predictions with original score semantics and detector version.
 4. Create incident records and associate evidence transactionally/idempotently.

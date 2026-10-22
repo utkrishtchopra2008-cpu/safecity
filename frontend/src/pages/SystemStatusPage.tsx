@@ -5,6 +5,7 @@ import { ApiError, requestJson, type CurrentUser } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { Surface } from '../components/Surface';
+import { SourceAdminPanel } from '../components/SourceAdminPanel';
 
 type Source = {
   id: string;
@@ -92,8 +93,9 @@ export function SystemStatusPage() {
             <p>No job totals are available to this role.</p>
           )}
           <p>
-            The API does not report worker liveness. The configured worker records bounded video
-            quality observations only; it does not generate event detections.
+            Worker liveness is not reported. When the pinned OpenCV Zoo models are configured, the
+            worker records bounded object-class and face-region observations alongside measured
+            video quality. It does not classify events or create incidents from object detections.
           </p>
         </Surface>
       ) : null}
@@ -110,6 +112,9 @@ export function SystemStatusPage() {
                       {source.source_type} · created {new Date(source.created_at).toLocaleString()}
                     </span>
                   </div>
+                  {source.source_type === 'simulated' ? (
+                    <StatusBadge tone="info">DEMO</StatusBadge>
+                  ) : null}
                   <StatusBadge
                     tone={
                       source.status === 'ready'
@@ -134,6 +139,7 @@ export function SystemStatusPage() {
           )}
         </Surface>
       ) : null}
+      {user.data?.role === 'technical_admin' ? <SourceAdminPanel /> : null}
     </div>
   );
 }

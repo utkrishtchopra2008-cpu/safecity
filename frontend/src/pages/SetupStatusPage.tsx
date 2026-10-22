@@ -22,15 +22,15 @@ const foundationItems = [
   {
     title: 'Private upload and processing',
     detail:
-      'Video upload validation and job creation are implemented; a background worker is not yet running.',
-    status: 'Queued only',
+      'Uploads are validated and queued. Processing requires private Supabase Storage; detector models are an explicit local configuration.',
+    status: 'Configuration required',
     ready: false,
   },
   {
     title: 'Detector, evaluation, and public context',
     detail:
-      'No approved detector artifact or evaluation dataset is present; TinyFish workflows are not implemented.',
-    status: 'Unavailable',
+      'Pinned object and face-region models can report bounded observations; incident classification and labeled evaluation require an approved event model and dataset. Public context is optional.',
+    status: 'Partial',
     ready: false,
   },
 ] as const;
@@ -41,7 +41,7 @@ export function SetupStatusPage() {
       <PageHeader
         eyebrow="Workspace setup"
         title="Implementation status"
-        description="SafeCity AI has working authentication and candidate-event review foundations. Processing, evaluation, and several operational screens remain unavailable."
+        description="SafeCity AI provides authenticated review and source workflows. Video object observations, private storage, evaluation data, and external context depend on explicit configuration."
       />
 
       <Surface className="intro-surface">
@@ -104,7 +104,7 @@ export function SetupStatusPage() {
           </div>
           <div>
             <dt>Context provider</dt>
-            <dd>TinyFish — disabled</dd>
+            <dd>TinyFish — optional backend configuration</dd>
           </div>
           <div>
             <dt>Data mode</dt>
@@ -112,8 +112,9 @@ export function SetupStatusPage() {
           </div>
         </dl>
         <p className="surface-footnote">
-          Uploads remain queued until a worker is deployed. No live detector or reliability metric
-          is currently available.
+          Object observations are not event classifications, and the absence of a model observation
+          does not establish that an incident did not occur. No benchmark metric is available until
+          a permitted labeled dataset is configured.
         </p>
         <a
           className="text-link"

@@ -13,7 +13,7 @@
 
 - Keep the modular monolith and a PostgreSQL-backed worker; do not add Redis/Celery or a second auth provider.
 - Keep local development storage outside the public tree and place Supabase Storage behind a server adapter when selected. Server-generated keys and backend authorization remain required even with a privileged service credential.
-- Keep detector mode explicitly simulated until an artifact, license, checksum, input/output contract and CPU runtime are independently verified. Simulated records must be labelled DEMO.
+- Keep event classification unavailable: the selected models detect COCO object classes and face regions only. They do not implement an incident/event taxonomy; no incident prediction or evaluation is manufactured from these outputs.
 - The worker performs bounded OpenCV quality sampling for uploaded clips and bounded TinyFish Search/Fetch for explicitly enabled simulated sources. It creates no incident predictions; evaluation jobs fail safely until a verified detector/evaluation handler exists.
 - Use the existing framework, package managers and pinned frontend dependencies. Do not upgrade major versions or add an unsupported provider/model.
 - Treat unavailable/null metric values as unavailable, never as zero; persist provenance needed to reproduce actual calculations.
@@ -25,7 +25,8 @@
 - The bundled Python 3.12 runtime was used with dependencies installed outside the repository; `uv` was unavailable. Backend lint, format, typing, and unit tests ran. The optional PostgreSQL test skips when no disposable database URL is configured.
 - A disposable PostgreSQL migration/integrity run was completed earlier in this work session. No Supabase project credentials are configured, so live RLS and private Storage checks remain unavailable.
 - Authentication, basic incident/review routes and limited source routes now exist. Resource authorization lacks a source-membership/tenant schema, and the complete API endpoint catalogue is still not implemented. RLS policies in `docs/supabase-storage.md` still need application in a configured project.
-- No approved detector artifact/license or evaluation dataset was found. Real inference and reliability claims remain blocked; no fabricated detector output will be added.
+- A pinned OpenCV Zoo YOLOX-S INT8BQ object model (Apache-2.0, SHA-256 verified) and YuNet face-region model (MIT, SHA-256 verified) are now implemented as optional CPU-only observation detectors. See `docs/model-artifacts.md`. Model files remain outside Git and fail closed on checksum mismatch. Their COCO/WIDER-Face behavior does not provide event classification, face recognition, or production performance claims.
+- No approved incident/event detector or licensed evaluation dataset was found. Real event inference, incident generation from uploads, and detector-backed evaluation remain blocked; no fabricated event output will be added.
 - No TinyFish secret is configured. Provider behavior can only be implemented and verified with mocks until an operator configures a backend secret.
 
 ## Audit finding on authority mismatch

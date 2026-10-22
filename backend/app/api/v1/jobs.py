@@ -50,24 +50,54 @@ def get_job(
     if not owns_job and context.user.role != "technical_admin":
         raise HTTPException(status_code=404, detail="RESOURCE_NOT_FOUND")
     can_read_diagnostics = context.user.role == "technical_admin"
+    can_read_results = owns_job or can_read_diagnostics
     safe_result_keys = {
         "duration_seconds",
         "width",
         "height",
+        "sampled_frames",
+        "sample_interval_seconds",
+        "mean_luma_0_255",
+        "mean_laplacian_variance",
+        "quality_observation_version",
         "evidence_id",
         "result_count",
         "eligible_asset_count",
         "excluded_asset_count",
+        "object_detector",
+        "object_model_sha256",
+        "object_taxonomy",
+        "object_sample_interval_seconds",
+        "object_sampled_frames",
+        "object_observations",
+        "face_region_detector",
+        "face_model_sha256",
+        "face_region_sampled_frames",
+        "face_region_frames_with_faces",
+        "face_region_count",
+        "incident_detector",
     }
-    result_metadata: dict[str, object] = (
-        {
-            key: value
-            for key, value in job.result_metadata.items()
-            if key in safe_result_keys and isinstance(value, (str, int, float, bool))
-        }
-        if can_read_diagnostics
-        else {}
-    )
+    result_metadata: dict[str, object] = {}
+    if can_read_results:
+        for key, value in job.result_metadata.items():
+            if key not in safe_result_keys:
+                continue
+            if isinstance(value, (str, int, float, bool)):
+                result_metadata[key] = value
+            elif key == "object_observations" and isinstance(value, list):
+                safe_observations = [
+                    {
+                        "class_name": observation["class_name"],
+                        "sample_count": observation["sample_count"],
+                        "mean_score": observation["mean_score"],
+                    }
+                    for observation in value[:80]
+                    if isinstance(observation, dict)
+                    and isinstance(observation.get("class_name"), str)
+                    and isinstance(observation.get("sample_count"), int)
+                    and isinstance(observation.get("mean_score"), (int, float))
+                ]
+                result_metadata[key] = safe_observations
     return JobStatus(
         id=job.id,
         job_type=cast(

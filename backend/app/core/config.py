@@ -36,8 +36,9 @@ class AppSettings(BaseModel):
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None
     supabase_storage_bucket: str = "safecity-evidence"
-    detector_backend: Literal["simulated", "local"] = "simulated"
+    detector_backend: Literal["simulated", "opencv_zoo"] = "simulated"
     detector_version: str = "simulated-v1"
+    detector_model_dir: Path = Path("../.data/models")
     worker_poll_interval_seconds: float = Field(default=2.0, gt=0, le=300)
     worker_max_attempts: int = Field(default=3, ge=1, le=20)
     tinyfish_context_enabled: bool = False
@@ -185,6 +186,7 @@ class AppSettings(BaseModel):
             "SUPABASE_STORAGE_BUCKET": "supabase_storage_bucket",
             "DETECTOR_BACKEND": "detector_backend",
             "DETECTOR_VERSION": "detector_version",
+            "DETECTOR_MODEL_DIR": "detector_model_dir",
             "WORKER_POLL_INTERVAL_SECONDS": "worker_poll_interval_seconds",
             "WORKER_MAX_ATTEMPTS": "worker_max_attempts",
             "TINYFISH_CONTEXT_ENABLED": "tinyfish_context_enabled",

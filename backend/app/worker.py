@@ -1,7 +1,7 @@
-"""Single PostgreSQL-backed worker for bounded video-quality processing.
+"""Single PostgreSQL-backed worker for bounded video quality and observations.
 
-No object/event detector is bundled or inferred here. This worker records measured
-frame-quality observations only; it never creates incidents or claims a detection.
+Optional pinned object/face-region models report coarse observations only. The worker
+never classifies events or creates incidents from model outputs.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import math
 import tempfile
 import time
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -25,6 +26,7 @@ from app.core.config import AppSettings, get_settings
 from app.db.models import Evidence, ProcessingJob, Source
 from app.db.session import get_engine
 from app.services.context_jobs import process_context_job
+from app.services.opencv_models import DetectorUnavailable, OpenCVZooModels
 from app.storage.supabase import StorageUnavailable, SupabaseStorage
 
 logger = logging.getLogger("safecity.worker")
@@ -32,6 +34,11 @@ CLAIM_LEASE_SECONDS = 180
 MAX_SAMPLES = 181
 SAMPLE_INTERVAL_SECONDS = 5
 MAX_JOB_SECONDS = 120
+
+
+@lru_cache(maxsize=1)
+def _get_opencv_models(model_directory: Path) -> OpenCVZooModels:
+    return OpenCVZooModels(model_directory)
 
 
 def claim_next_job(database: OrmSession, now: datetime | None = None) -> ProcessingJob | None:
@@ -102,7 +109,12 @@ def claim_next_job(database: OrmSession, now: datetime | None = None) -> Process
         return job
 
 
-def sample_quality(path: Path, maximum_duration_seconds: int) -> dict[str, Any]:
+def sample_quality(
+    path: Path,
+    maximum_duration_seconds: int,
+    *,
+    deadline_monotonic: float | None = None,
+) -> dict[str, Any]:
     """Measure coarse video quality on bounded samples without retaining any frames."""
     capture = cv2.VideoCapture(str(path))
     try:
@@ -130,7 +142,9 @@ def sample_quality(path: Path, maximum_duration_seconds: int) -> dict[str, Any]:
         started = time.monotonic()
         last_offset = min(int(duration), (MAX_SAMPLES - 1) * SAMPLE_INTERVAL_SECONDS)
         for second in range(0, last_offset + 1, SAMPLE_INTERVAL_SECONDS):
-            if time.monotonic() - started > MAX_JOB_SECONDS:
+            if time.monotonic() - started > MAX_JOB_SECONDS or (
+                deadline_monotonic is not None and time.monotonic() >= deadline_monotonic
+            ):
                 raise TimeoutError("VIDEO_QUALITY_TIMEOUT")
             capture.set(cv2.CAP_PROP_POS_MSEC, second * 1000)
             decoded, frame = capture.read()
@@ -275,15 +289,28 @@ async def run_once(factory: sessionmaker[OrmSession], settings: AppSettings) -> 
         byte_size = await storage.download_to_path(
             storage_key, temporary_path, maximum_bytes=settings.max_upload_bytes
         )
-        measurements = sample_quality(temporary_path, settings.max_upload_duration_seconds)
+        deadline = time.monotonic() + MAX_JOB_SECONDS
+        measurements = sample_quality(
+            temporary_path,
+            settings.max_upload_duration_seconds,
+            deadline_monotonic=deadline,
+        )
+        if settings.detector_backend == "opencv_zoo":
+            measurements.update(
+                _get_opencv_models(settings.detector_model_dir).sample_video(
+                    temporary_path,
+                    maximum_duration_seconds=settings.max_upload_duration_seconds,
+                    deadline_monotonic=deadline,
+                )
+            )
         measurements["downloaded_bytes"] = byte_size
         _finish_success(factory, job_id, source_id, measurements)
     except TimeoutError:
         _finish_failure(
             factory,
             job_id,
-            "VIDEO_QUALITY_TIMEOUT",
-            "Bounded quality sampling exceeded its time limit.",
+            "VIDEO_PROCESSING_TIMEOUT",
+            "Bounded video processing exceeded its time limit.",
             retryable=False,
         )
     except ValueError as exc:
@@ -293,6 +320,16 @@ async def run_once(factory: sessionmaker[OrmSession], settings: AppSettings) -> 
             job_id,
             code,
             "The uploaded video could not be sampled safely.",
+            retryable=False,
+        )
+    except DetectorUnavailable as exc:
+        _finish_failure(
+            factory,
+            job_id,
+            str(exc)
+            if str(exc).startswith(("MODEL_", "OBJECT_", "FACE_", "FRAME_", "VIDEO_"))
+            else "MODEL_UNAVAILABLE",
+            "The configured detector could not produce a validated result.",
             retryable=False,
         )
     except cv2.error:
@@ -322,7 +359,7 @@ async def serve() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     settings = get_settings()
     factory = sessionmaker(bind=get_engine(), expire_on_commit=False)
-    logger.info("worker_started mode=quality_only")
+    logger.info("worker_started detector_backend=%s", settings.detector_backend)
     while True:
         try:
             found_job = await run_once(factory, settings)

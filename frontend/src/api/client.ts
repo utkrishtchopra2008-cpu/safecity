@@ -83,7 +83,8 @@ export async function requestJson<T>(path: string, init: RequestInit = {}): Prom
   const method = (init.method || 'GET').toUpperCase();
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
-  if (init.body !== undefined && !headers.has('Content-Type')) {
+  const isMultipartBody = typeof FormData !== 'undefined' && init.body instanceof FormData;
+  if (init.body !== undefined && !isMultipartBody && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
