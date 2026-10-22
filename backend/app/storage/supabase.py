@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -17,6 +20,13 @@ class StorageUnavailable(RuntimeError):
     def __init__(self, message: str, *, retryable: bool = True) -> None:
         super().__init__(message)
         self.retryable = retryable
+
+
+@dataclass(frozen=True)
+class ListedStorageObject:
+    key: str
+    is_file: bool
+    created_at: datetime | None
 
 
 class SupabaseStorage:
@@ -76,6 +86,60 @@ class SupabaseStorage:
             return True
         except httpx.HTTPError as exc:
             raise StorageUnavailable("Private evidence availability could not be checked") from exc
+
+    async def list_folder(
+        self, folder: str, *, offset: int, limit: int = 100
+    ) -> list[ListedStorageObject]:
+        """List one bounded page from the private bucket through the Storage API."""
+        if not 1 <= limit <= 1000 or offset < 0:
+            raise ValueError("Storage listing page is out of range")
+        if folder.startswith("/") or ".." in folder.split("/") or "\\" in folder:
+            raise ValueError("Storage folder must be a server-generated relative prefix")
+        chunks: list[bytes] = []
+        size = 0
+        try:
+            async with self._client.stream(
+                "POST",
+                f"{self._base_url}/object/list/{quote(self._bucket, safe='')}",
+                headers={**self._headers, "Content-Type": "application/json"},
+                json={
+                    "prefix": folder,
+                    "limit": limit,
+                    "offset": offset,
+                    "sortBy": {"column": "name", "order": "asc"},
+                },
+            ) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes():
+                    size += len(chunk)
+                    if size > 1_000_000:
+                        raise StorageUnavailable(
+                            "Private storage listing exceeded its response limit"
+                        )
+                    chunks.append(chunk)
+        except (httpx.HTTPError, ValueError) as exc:
+            if isinstance(exc, StorageUnavailable):
+                raise
+            raise StorageUnavailable("Private storage listing failed") from exc
+
+        try:
+            payload = json.loads(b"".join(chunks))
+            if not isinstance(payload, list):
+                raise ValueError
+            entries: list[ListedStorageObject] = []
+            for item in payload:
+                if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                    raise ValueError
+                name = item["name"]
+                key = name if name.startswith(folder) else f"{folder}{name}"
+                created_at = _parse_storage_timestamp(item.get("created_at"))
+                is_file = item.get("id") is not None
+                if not is_file and not key.endswith("/"):
+                    key += "/"
+                entries.append(ListedStorageObject(key=key, is_file=is_file, created_at=created_at))
+            return entries
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            raise StorageUnavailable("Private storage listing returned invalid metadata") from exc
 
     async def download_to_path(self, key: str, path: Path, *, maximum_bytes: int) -> int:
         """Stream a private object to a temporary file with a strict byte ceiling."""
@@ -143,3 +207,13 @@ class SupabaseStorage:
             response.raise_for_status()
         except (httpx.HTTPError, ValueError) as exc:
             raise StorageUnavailable("Private evidence cleanup failed") from exc
+
+
+def _parse_storage_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo is not None else None
+    except ValueError:
+        return None

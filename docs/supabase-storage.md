@@ -31,3 +31,17 @@ These policies make direct browser access unavailable. The backend uses a servic
 Set `STORAGE_BACKEND=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_STORAGE_BUCKET` in the backend environment. For local metadata development, run PostgreSQL and apply the versioned Alembic migrations with `DATABASE_URL`; do not use `metadata.create_all`. Keep the bucket private in every environment that handles real evidence. Until upload and authorized evidence routes are implemented and verified, do not upload real footage.
 
 Evidence objects use server-generated relative keys. Signed URLs are scoped to one object and limited to five minutes maximum by the adapter. Uploads set the stored object cache TTL to zero because signed URL expiry and CDN cache lifetime are separate controls. The URL is sensitive and must not be logged or persisted. Retention and deletion remain explicit, approval-dependent workflows.
+
+## Orphan inventory and explicit cleanup
+
+`backend/app/cli/cleanup_orphan_storage.py` inventories only generated `sources/{source UUID}/{evidence UUID}/original.{supported video extension}` keys through Supabase's Storage list API. It ignores folders without file metadata, unrecognized keys and objects with unknown creation times. It compares candidates with authoritative `evidence.storage_key` values, selects only objects older than an operator-supplied age threshold, and checks the database reference again immediately before each deletion. Database transactions are closed before Storage network requests. Deletions use the Storage API, never direct edits to Supabase's `storage` schema.
+
+Cleanup is never automatic. From `backend/`, inspect first with a threshold selected for the specific recovery operation:
+
+```sh
+uv run python -m app.cli.cleanup_orphan_storage --older-than-hours 48
+```
+
+Review every listed key, then repeat the same command with `--apply` only when the inventory is correct. The example threshold is not a retention policy; the command requires an explicit value and supports 1–8760 hours. It scans at most 5,000 files per run and fails safely above that bound. Live Supabase behavior remains unverified until exercised in a configured non-production project.
+
+The adapter follows Supabase's documented [Storage list API](https://supabase.com/docs/reference/javascript/file-buckets-list) and [Storage deletion guidance](https://supabase.com/docs/guides/storage/management/delete-objects), which directs object deletion through the Storage API rather than SQL.
