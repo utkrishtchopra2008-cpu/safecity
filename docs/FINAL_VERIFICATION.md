@@ -9,7 +9,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | Backend Ruff lint | Passed with the locked backend environment. |
 | Backend Ruff format check | Passed; 49 files formatted. |
 | Backend mypy | Passed; no issues in 41 source files. |
-| Backend pytest | 92 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
+| Backend pytest | 97 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
 | Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
 | Frontend lint/typecheck/unit tests/build | Passed; 12 Vitest tests, including the AppShell skip-link/navigation contract and inert rendering of HTML-like TinyFish text. |
@@ -17,7 +17,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | OpenAPI route catalogue | Loaded successfully with 25 paths; only a subset of `API.md` endpoints exists. |
 | Docker Compose | `docker compose config -q` passed. No full multi-service app/worker deployment was verified. |
 | Live Supabase storage/RLS | NOT RUN; credentials/project were unavailable. |
-| Video pipeline/model | A generated short AVI passed real OpenCV decode/quality sampling and optional CPU YOLOX/YuNet processing. Artifacts were verified against pinned source revisions and SHA-256 hashes. Detector tests cover blank frames and normalization; these object/face-region observations never create incident records. Broader codec/corruption and production resource tests are NOT RUN. No event detector is available. |
+| Video pipeline/model | A generated short AVI passed real OpenCV decode/quality sampling and optional CPU YOLOX/YuNet processing. Artifacts were verified against pinned source revisions and SHA-256 hashes. Detector tests cover blank frames and normalization; upload tests fault-inject decoder-open, invalid metadata, excessive dimensions/duration, and no-frame failures. These object/face-region observations never create incident records. A broader real-codec/corrupt-file and production resource matrix is NOT RUN. No event detector is available. |
 | TinyFish | Search/Fetch request handling, URL boundaries and provider failures passed mocked tests; source-level refresh passed SQLite persistence/deduplication and disabled-provider tests. No live request or PostgreSQL queue integration was run; no key is configured. |
 | Visual and accessibility review | Partial manual review: login and protected-route error states were inspected in the browser; responsive header checked at 1024 px and 390 px, with no horizontal overflow at 390 px. Full-page screenshot and keyboard/contrast audit remains NOT RUN. |
 

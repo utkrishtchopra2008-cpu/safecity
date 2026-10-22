@@ -1,5 +1,7 @@
 import asyncio
 import io
+import sys
+from types import SimpleNamespace
 
 import pytest
 from starlette.datastructures import Headers
@@ -83,3 +85,57 @@ def test_client_path_in_filename_is_never_used_for_staging_path(
         assert staged.path.read_bytes() == valid_mp4_header()
     finally:
         staged.remove()
+
+
+@pytest.mark.parametrize(
+    ("opened", "fps", "frames", "width", "height", "decoded", "error"),
+    [
+        (False, 30.0, 300.0, 640, 480, True, "could not open"),
+        (True, 0.0, 300.0, 640, 480, True, "invalid or unsupported"),
+        (True, 30.0, 300.0, 640, 480, False, "no decodable frame"),
+        (True, 30.0, 300.0, 6000, 5000, True, "invalid or unsupported"),
+        (True, 1.0, 700.0, 640, 480, True, "duration is invalid or exceeds"),
+    ],
+)
+def test_corrupt_or_unsupported_video_stream_is_rejected_and_released(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    opened: bool,
+    fps: float,
+    frames: float,
+    width: int,
+    height: int,
+    decoded: bool,
+    error: str,
+) -> None:
+    released = False
+
+    class Capture:
+        def isOpened(self) -> bool:
+            return opened
+
+        def get(self, property_id: int) -> float:
+            values = {1: fps, 2: frames, 3: float(width), 4: float(height)}
+            return values[property_id]
+
+        def read(self) -> tuple[bool, object | None]:
+            return decoded, object() if decoded else None
+
+        def release(self) -> None:
+            nonlocal released
+            released = True
+
+    capture = Capture()
+    fake_cv2 = SimpleNamespace(
+        VideoCapture=lambda _path: capture,
+        CAP_PROP_FPS=1,
+        CAP_PROP_FRAME_COUNT=2,
+        CAP_PROP_FRAME_WIDTH=3,
+        CAP_PROP_FRAME_HEIGHT=4,
+    )
+    monkeypatch.setitem(sys.modules, "cv2", fake_cv2)
+
+    with pytest.raises(uploads.UploadValidationError, match=error):
+        uploads._inspect_video(tmp_path / "corrupt.mp4", maximum_duration=600)
+
+    assert released
