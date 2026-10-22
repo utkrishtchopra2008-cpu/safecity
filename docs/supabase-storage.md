@@ -34,7 +34,7 @@ Evidence objects use server-generated relative keys. Signed URLs are scoped to o
 
 ## Orphan inventory and explicit cleanup
 
-`backend/app/cli/cleanup_orphan_storage.py` inventories only generated `sources/{source UUID}/{evidence UUID}/original.{supported video extension}` keys through Supabase's Storage list API. It ignores folders without file metadata, unrecognized keys and objects with unknown creation times. It compares candidates with authoritative `evidence.storage_key` values, selects only objects older than an operator-supplied age threshold, and checks the database reference again immediately before each deletion. Database transactions are closed before Storage network requests. Deletions use the Storage API, never direct edits to Supabase's `storage` schema.
+`backend/app/cli/cleanup_orphan_storage.py` inventories only generated `sources/{source UUID}/{evidence UUID}/original.{supported video extension}` keys through Supabase's Storage list API. It ignores folders without file metadata, unrecognized keys and objects with unknown creation times. It reports evidence rows whose object is missing, compares candidate objects with authoritative `evidence.storage_key` values, selects only objects older than an operator-supplied age threshold, and checks the database reference again immediately before each deletion. Missing evidence objects are reported only; the command never changes their database rows. Database transactions are closed before Storage network requests. Deletions use the Storage API, never direct edits to Supabase's `storage` schema.
 
 Cleanup is never automatic. From `backend/`, inspect first with a threshold selected for the specific recovery operation:
 

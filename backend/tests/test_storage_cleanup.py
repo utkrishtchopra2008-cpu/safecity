@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Evidence
 from app.services.storage_cleanup import (
+    find_missing_storage_references,
     find_old_unreferenced_keys,
     list_source_objects,
     remove_verified_orphans,
@@ -43,18 +44,29 @@ def test_orphan_scan_only_returns_old_generated_unreferenced_objects() -> None:
     Evidence.__table__.create(engine)
     now = datetime(2026, 10, 23, tzinfo=UTC)
     referenced = storage_key()
+    missing_reference = storage_key()
     orphan = storage_key()
     malformed = "sources/not-a-uuid/evidence/original.mp4"
     with Session(engine) as database:
-        database.add(
-            Evidence(
-                source_id=uuid4(),
-                evidence_type="original_video",
-                storage_backend="object",
-                storage_key=referenced,
-                mime_type="video/mp4",
-                status="available",
-            )
+        database.add_all(
+            [
+                Evidence(
+                    source_id=uuid4(),
+                    evidence_type="original_video",
+                    storage_backend="object",
+                    storage_key=referenced,
+                    mime_type="video/mp4",
+                    status="available",
+                ),
+                Evidence(
+                    source_id=uuid4(),
+                    evidence_type="original_video",
+                    storage_backend="object",
+                    storage_key=missing_reference,
+                    mime_type="video/mp4",
+                    status="available",
+                ),
+            ]
         )
         database.commit()
         objects = [
@@ -68,8 +80,10 @@ def test_orphan_scan_only_returns_old_generated_unreferenced_objects() -> None:
         result = find_old_unreferenced_keys(
             database, objects, older_than=timedelta(days=2), now=now
         )
+        missing = find_missing_storage_references(database, objects)
 
     assert result == [orphan]
+    assert missing == [missing_reference]
     engine.dispose()
 
 

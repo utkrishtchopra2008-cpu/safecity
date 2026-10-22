@@ -80,6 +80,21 @@ def find_old_unreferenced_keys(
     return [key for key in candidates if key not in referenced]
 
 
+def find_missing_storage_references(
+    database: OrmSession, objects: list[ListedStorageObject]
+) -> list[str]:
+    """Report authoritative evidence keys missing from the private object listing."""
+    listed = {item.key for item in objects if item.is_file}
+    query = select(Evidence.storage_key).where(
+        Evidence.storage_backend == "object", Evidence.storage_key.like("sources/%")
+    )
+    references = list(database.scalars(query.limit(MAX_SCANNED_OBJECTS + 1)))
+    database.rollback()
+    if len(references) > MAX_SCANNED_OBJECTS:
+        raise StorageUnavailable("Evidence consistency check exceeded its safe row limit")
+    return sorted(set(references) - listed)
+
+
 async def remove_verified_orphans(
     database: OrmSession, storage: SupabaseStorage, keys: list[str]
 ) -> tuple[list[str], list[str]]:

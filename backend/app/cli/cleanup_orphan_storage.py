@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import get_settings
 from app.db.session import get_engine
 from app.services.storage_cleanup import (
+    find_missing_storage_references,
     find_old_unreferenced_keys,
     list_source_objects,
     remove_verified_orphans,
@@ -39,18 +40,27 @@ async def _run(*, older_than_hours: int, apply: bool) -> int:
     try:
         with factory() as database:
             objects = await list_source_objects(storage)
+            missing = find_missing_storage_references(database, objects)
             candidates = find_old_unreferenced_keys(
                 database,
                 objects,
                 older_than=timedelta(hours=older_than_hours),
             )
             if not apply:
+                print(
+                    f"Consistency scan: {len(missing)} evidence reference(s) have no listed object."
+                )
+                for key in missing:
+                    print(f"  missing {key}")
                 print(f"Dry run: {len(candidates)} old unreferenced upload object(s) found.")
                 for key in candidates:
                     print(f"  {key}")
                 print("No objects were changed. Review this list and rerun with --apply to delete.")
                 return 0
             removed, skipped = await remove_verified_orphans(database, storage, candidates)
+            print(f"Consistency scan: {len(missing)} evidence reference(s) have no listed object.")
+            for key in missing:
+                print(f"  missing {key}")
             print(f"Removed {len(removed)} verified orphan object(s); skipped {len(skipped)}.")
             for key in removed:
                 print(f"  removed {key}")
