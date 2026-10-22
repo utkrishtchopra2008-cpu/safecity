@@ -396,6 +396,71 @@ def test_supervisor_system_status_reports_aggregate_counts_and_degradation(
     }
 
 
+def test_technical_admin_can_read_job_diagnostics_without_owning_job(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    factory = auth_client.app.state.test_session_factory
+    with factory() as database:
+        operator = database.query(User).filter_by(email="operator@example.com").one()
+        operator_id = operator.id
+        database.add(
+            User(
+                id=uuid.uuid4(),
+                email="admin@example.com",
+                display_name="Test Admin",
+                password_hash=PasswordHasher().hash("correct horse battery staple"),
+                role="technical_admin",
+                is_active=True,
+            )
+        )
+        database.commit()
+
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+
+    job_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    job = SimpleNamespace(
+        id=job_id,
+        created_by=operator_id,
+        job_type="source_processing",
+        status="failed",
+        created_at=now,
+        started_at=now,
+        finished_at=now,
+        attempt_count=2,
+        error_code="DECODER_FAILED",
+        error_summary="The uploaded media could not be decoded.",
+        result_metadata={"duration_seconds": 1.5, "private_path": "/srv/private/video.mp4"},
+    )
+
+    class JobDatabase:
+        def __init__(self, database: OrmSession) -> None:
+            self.database = database
+
+        def __getattr__(self, name):
+            return getattr(self.database, name)
+
+        def get(self, _model, requested_id):
+            return job if requested_id == job_id else None
+
+    def job_db() -> Generator[JobDatabase, None, None]:
+        with factory() as database:
+            yield JobDatabase(database)
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, job_db)
+
+    response = auth_client.get(f"/api/v1/jobs/{job_id}")
+
+    assert response.status_code == 200
+    assert response.json()["error_code"] == "DECODER_FAILED"
+    assert response.json()["error_summary"] == "The uploaded media could not be decoded."
+    assert response.json()["result_metadata"] == {"duration_seconds": 1.5}
+
+
 def test_reliability_route_requires_authentication(auth_client: TestClient) -> None:
     response = auth_client.get("/api/v1/reliability/summary")
 
