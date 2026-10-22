@@ -21,7 +21,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | TinyFish | Search/Fetch request handling, URL boundaries and provider failures passed mocked tests; source-level refresh passed SQLite persistence/deduplication and disabled-provider tests. No live request or PostgreSQL queue integration was run; no key is configured. |
 | Visual and accessibility review | NOT RUN as a full page/viewport screenshot audit. |
 
-The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, and inert external-content rendering. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub CI passed on `a42acc0`; newer local commits are queued for CI after push.
+The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, and inert external-content rendering. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on commit `e0a54f7`.
 
 ## Operational constraints and remaining requirements
 
