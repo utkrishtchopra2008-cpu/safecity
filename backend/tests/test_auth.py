@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.v1 import incidents as incidents_api
 from app.api.v1 import public_context as public_context_api
 from app.api.v1.auth import COOKIE_NAME, login_limiter
 from app.core.config import AppSettings, get_settings
@@ -194,6 +195,111 @@ def test_source_mutation_rejects_operator_role(auth_client: TestClient) -> None:
 
     assert response.status_code == 403
     assert response.json()["code"] == "PERMISSION_DENIED"
+
+
+def test_operator_review_submission_uses_authenticated_reviewer_and_typed_response(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+    csrf = auth_client.get("/api/v1/auth/csrf")
+    assert csrf.status_code == 200
+
+    incident_id = uuid.uuid4()
+    review_id = uuid.uuid4()
+    reviewer_id = uuid.UUID(login.json()["user"]["id"])
+    now = datetime.now(UTC)
+    calls: list[tuple[uuid.UUID, uuid.UUID, str, str | None]] = []
+
+    def create_review(_database, _request, *, incident_id, reviewer, body):
+        calls.append((incident_id, reviewer.id, body.outcome, body.review_note))
+        return SimpleNamespace(
+            id=review_id,
+            incident_id=incident_id,
+            reviewer_id=reviewer.id,
+            outcome=body.outcome,
+            review_note=body.review_note,
+            reviewed_at=now,
+        )
+
+    monkeypatch.setattr(incidents_api, "create_review", create_review)
+
+    response = auth_client.post(
+        f"/api/v1/incidents/{incident_id}/reviews",
+        headers={
+            "Origin": "http://testserver",
+            "X-CSRF-Token": csrf.json()["csrf_token"],
+        },
+        json={"outcome": "inconclusive", "review_note": "Insufficient evidence."},
+    )
+    invalid = auth_client.post(
+        f"/api/v1/incidents/{incident_id}/reviews",
+        headers={
+            "Origin": "http://testserver",
+            "X-CSRF-Token": csrf.json()["csrf_token"],
+        },
+        json={"outcome": "accused", "reviewer_id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "review": {
+            "id": str(review_id),
+            "incident_id": str(incident_id),
+            "reviewer_id": str(reviewer_id),
+            "outcome": "inconclusive",
+            "review_note": "Insufficient evidence.",
+            "reviewed_at": now.isoformat().replace("+00:00", "Z"),
+        },
+        "review_status": "reviewed",
+    }
+    assert calls == [(incident_id, reviewer_id, "inconclusive", "Insufficient evidence.")]
+    assert invalid.status_code == 422
+    assert len(calls) == 1
+
+
+def test_authenticated_user_can_read_typed_incident_review_history(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+    incident_id = uuid.uuid4()
+    reviewer_id = uuid.UUID(login.json()["user"]["id"])
+    review_id = uuid.uuid4()
+    reviewed_at = datetime.now(UTC)
+    review = SimpleNamespace(
+        id=review_id,
+        incident_id=incident_id,
+        reviewer_id=reviewer_id,
+        outcome="false_alert",
+        review_note="Duplicate of a previously reviewed event.",
+        reviewed_at=reviewed_at,
+    )
+    monkeypatch.setattr(
+        incidents_api,
+        "get_incident_detail",
+        lambda *_args, **_kwargs: (None, None, [], [], [review], None),
+    )
+
+    response = auth_client.get(f"/api/v1/incidents/{incident_id}/reviews")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(review_id),
+            "incident_id": str(incident_id),
+            "reviewer_id": str(reviewer_id),
+            "outcome": "false_alert",
+            "review_note": "Duplicate of a previously reviewed event.",
+            "reviewed_at": reviewed_at.isoformat().replace("+00:00", "Z"),
+        }
+    ]
 
 
 def test_job_and_system_routes_are_registered_and_require_authentication(
