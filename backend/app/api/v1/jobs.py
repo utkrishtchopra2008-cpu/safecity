@@ -7,13 +7,14 @@ from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as OrmSession
 
 from app.api.v1.auth import AuthContext, get_auth_context
 from app.db.models import ProcessingJob, Source
 from app.db.session import get_db
+from app.services.video_types import ObjectDetection, QualityMeasurement
 
 router = APIRouter(tags=["jobs", "system"])
 
@@ -60,6 +61,11 @@ def get_job(
         "mean_luma_0_255",
         "mean_laplacian_variance",
         "quality_observation_version",
+        "quality_measurements",
+        "quality_result_status",
+        "quality_uncertainty_reasons",
+        "source_timestamp_availability",
+        "requested_sample_frames",
         "evidence_id",
         "result_count",
         "eligible_asset_count",
@@ -70,6 +76,10 @@ def get_job(
         "object_sample_interval_seconds",
         "object_sampled_frames",
         "object_observations",
+        "object_detections",
+        "object_detection_limit_reached",
+        "object_timestamp_status",
+        "object_decode_failures",
         "face_region_detector",
         "face_model_sha256",
         "face_region_sampled_frames",
@@ -98,6 +108,34 @@ def get_job(
                     and isinstance(observation.get("mean_score"), (int, float))
                 ]
                 result_metadata[key] = safe_observations
+            elif key == "object_detections" and isinstance(value, list):
+                safe_detections: list[dict[str, object]] = []
+                for detection in value[:500]:
+                    if not isinstance(detection, dict):
+                        continue
+                    try:
+                        safe_detections.append(
+                            ObjectDetection.model_validate(detection).model_dump(mode="json")
+                        )
+                    except ValidationError:
+                        continue
+                result_metadata[key] = safe_detections
+            elif key == "quality_measurements" and isinstance(value, list):
+                safe_measurements: list[dict[str, object]] = []
+                for measurement in value[:32]:
+                    if not isinstance(measurement, dict):
+                        continue
+                    try:
+                        safe_measurements.append(
+                            QualityMeasurement.model_validate(measurement).model_dump(mode="json")
+                        )
+                    except ValidationError:
+                        continue
+                result_metadata[key] = safe_measurements
+            elif key == "quality_uncertainty_reasons" and isinstance(value, list):
+                result_metadata[key] = [
+                    reason[:80] for reason in value[:20] if isinstance(reason, str)
+                ]
     return JobStatus(
         id=job.id,
         job_type=cast(

@@ -123,6 +123,8 @@ The API must validate identifier formats and return a consistent not-found respo
 | 500 Internal Server Error | Unexpected application failure |
 | 503 Service Unavailable | A required dependency is temporarily unavailable |
 
+Upload failures use safe typed codes in the standard error envelope: `VIDEO_EMPTY`, `VIDEO_TOO_LARGE`, `VIDEO_UNSUPPORTED_CODEC`, `VIDEO_INVALID_SIGNATURE`, `VIDEO_INVALID`, `VIDEO_CORRUPT_OR_TRUNCATED`, and `VIDEO_DURATION_INVALID`. They never include decoder diagnostics, local paths, or file contents.
+
 Use these codes consistently. Do not use a successful HTTP response to imply that background video processing has succeeded.
 
 ---
@@ -579,7 +581,7 @@ Include:
 
 Do not expose stack traces, raw exception contents, private paths, or other users' job data.
 
-For `source_processing`, an authorized job owner or technical administrator may receive bounded measured video-quality fields and, when `DETECTOR_BACKEND=opencv_zoo`, object-observation summaries with detector/version/taxonomy provenance. Object summaries contain only class, sample count, and mean model score; no bounding boxes or frame bytes are returned. Face-region output is a count only. These values are observations, not incident classifications, proof that an event occurred, or reliability metrics. A successful job with no object observations does not establish that no incident occurred. Result keys are allowlisted by the API; private storage paths and arbitrary worker metadata are never serialized.
+For `source_processing`, an authorized job owner or technical administrator may receive bounded measured video-quality fields and, when `DETECTOR_BACKEND=opencv_zoo`, object-observation summaries and at most 500 normalized object detections. Each detection includes class, uncalibrated model score, normalized box, source frame index, reliable decoder timestamp (or explicit unknown), detector version, and evidence ID. These are object observations, not incident classifications, proof that an event occurred, or reliability metrics. Face-region output is a count only; face boxes and image bytes are never returned. Quality measurements include value, algorithm/version, configuration, threshold where configured, status, and reason code. Quality thresholds are optional and unset by default; without them the aggregate quality result is `not_evaluated`. A measured quality concern is marked `uncertain`, never an incident. A successful job with no object observations does not establish that no incident occurred. Result keys and nested schemas are allowlisted by the API; private storage paths and arbitrary worker metadata are never serialized.
 
 #### Health checks
 

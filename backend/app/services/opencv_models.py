@@ -12,10 +12,14 @@ import math
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+from uuid import UUID
 
 import cv2
 import numpy as np
+
+from app.services.video_sampling import bounded_sample_frame_indices, decoder_timestamp_ms
+from app.services.video_types import BoundingBox, ObjectDetection, RawObjectDetection
 
 YOLOX_MODEL = "yolox.onnx"
 YUNET_MODEL = "yunet.onnx"
@@ -110,8 +114,22 @@ OBJECT_SAMPLE_INTERVAL_SECONDS = 30
 MAX_OBJECT_SAMPLES = 31
 MAX_OBJECTS_PER_SAMPLE = 100
 MAX_AGGREGATE_CLASSES = 80
+MAX_DETECTIONS_PER_VIDEO = 500
 OBJECT_SCORE_THRESHOLD = 0.35
 OBJECT_NMS_THRESHOLD = 0.5
+
+
+class DetectorAdapter(Protocol):
+    """Typed boundary for the worker's optional object/face observation adapter."""
+
+    def sample_video(
+        self,
+        video_path: Path,
+        *,
+        maximum_duration_seconds: int,
+        deadline_monotonic: float,
+        evidence_id: UUID,
+    ) -> dict[str, object]: ...
 
 
 class DetectorUnavailable(RuntimeError):
@@ -128,7 +146,9 @@ def _sha256(path: Path) -> str:
 
 def verify_model(path: Path, expected_sha256: str) -> None:
     """Fail closed when model bytes do not match the audited artifact."""
-    if not path.is_file() or _sha256(path) != expected_sha256:
+    if not path.is_file():
+        raise DetectorUnavailable("MODEL_UNAVAILABLE")
+    if _sha256(path) != expected_sha256:
         raise DetectorUnavailable("MODEL_CHECKSUM_INVALID")
 
 
@@ -191,7 +211,7 @@ class OpenCVZooModels:
             strides.append(np.full((1, side * side, 1), stride, dtype=np.float32))
         return np.concatenate(grids, axis=1), np.concatenate(strides, axis=1)
 
-    def detect_objects(self, frame: np.ndarray) -> list[tuple[str, float]]:
+    def detect_objects(self, frame: np.ndarray) -> list[RawObjectDetection]:
         self._load()
         if frame.ndim != 3 or frame.shape[2] != 3 or frame.size == 0:
             raise DetectorUnavailable("FRAME_INVALID")
@@ -201,17 +221,17 @@ class OpenCVZooModels:
         outputs = self._object_net.forward(self._object_net.getUnconnectedOutLayersNames())
         if len(outputs) != 1:
             raise DetectorUnavailable("OBJECT_OUTPUT_INVALID")
-        detections = np.asarray(outputs[0], dtype=np.float32)
-        if detections.ndim == 3 and detections.shape[0] == 1:
-            detections = detections[0]
+        detection_rows = np.asarray(outputs[0], dtype=np.float32)
+        if detection_rows.ndim == 3 and detection_rows.shape[0] == 1:
+            detection_rows = detection_rows[0]
         expected_rows = 8400
-        if detections.shape != (expected_rows, len(COCO_CLASSES) + 5):
+        if detection_rows.shape != (expected_rows, len(COCO_CLASSES) + 5):
             raise DetectorUnavailable("OBJECT_OUTPUT_INVALID")
-        if not np.isfinite(detections).all():
+        if not np.isfinite(detection_rows).all():
             raise DetectorUnavailable("OBJECT_OUTPUT_INVALID")
 
         grids, expanded_strides = self._anchors()
-        decoded = detections.copy()
+        decoded = detection_rows.copy()
         decoded[:, :2] = (decoded[:, :2] + grids[0]) * expanded_strides[0]
         with np.errstate(over="ignore", invalid="ignore"):
             decoded[:, 2:4] = np.exp(decoded[:, 2:4]) * expanded_strides[0]
@@ -220,6 +240,8 @@ class OpenCVZooModels:
         scores = decoded[:, 4:5] * decoded[:, 5:]
         class_ids = np.argmax(scores, axis=1)
         confidence = np.max(scores, axis=1)
+        if not np.isfinite(confidence).all() or np.any(confidence < 0) or np.any(confidence > 1):
+            raise DetectorUnavailable("OBJECT_OUTPUT_INVALID")
         eligible = np.flatnonzero(confidence >= OBJECT_SCORE_THRESHOLD)
         if len(eligible) == 0:
             return []
@@ -234,14 +256,36 @@ class OpenCVZooModels:
             OBJECT_SCORE_THRESHOLD,
             OBJECT_NMS_THRESHOLD,
         )
-        kept_indices = np.asarray(keep).reshape(-1)[:MAX_OBJECTS_PER_SAMPLE]
-        return [
-            (
-                COCO_CLASSES[int(class_ids[eligible[index]])],
-                round(float(confidence[eligible[index]]), 4),
+        if keep is None or len(keep) == 0:
+            return []
+        kept_indices = [
+            int(index) for index in np.asarray(keep).reshape(-1) if 0 <= int(index) < len(eligible)
+        ][:MAX_OBJECTS_PER_SAMPLE]
+        image_height, image_width = frame.shape[:2]
+        scale = min(INPUT_SIZE / image_height, INPUT_SIZE / image_width)
+        normalized_detections: list[RawObjectDetection] = []
+        for index in kept_indices:
+            center_x, center_y, box_width, box_height = boxes[index]
+            left = min(image_width, max(0.0, float((center_x - box_width / 2) / scale)))
+            top = min(image_height, max(0.0, float((center_y - box_height / 2) / scale)))
+            right = min(image_width, max(0.0, float((center_x + box_width / 2) / scale)))
+            bottom = min(image_height, max(0.0, float((center_y + box_height / 2) / scale)))
+            if right <= left or bottom <= top:
+                continue
+            normalized_detections.append(
+                RawObjectDetection(
+                    class_name=COCO_CLASSES[int(class_ids[eligible[index]])],
+                    score=round(float(confidence[eligible[index]]), 4),
+                    box=BoundingBox(
+                        x_min=left / image_width,
+                        y_min=top / image_height,
+                        x_max=right / image_width,
+                        y_max=bottom / image_height,
+                    ),
+                    detector_version=YOLOX_VERSION,
+                )
             )
-            for index in kept_indices
-        ]
+        return normalized_detections
 
     def face_region_count(self, frame: np.ndarray) -> int:
         """Return only a count; discard all face boxes immediately."""
@@ -263,8 +307,9 @@ class OpenCVZooModels:
         *,
         maximum_duration_seconds: int,
         deadline_monotonic: float,
+        evidence_id: UUID,
     ) -> dict[str, object]:
-        """Sample object classes and transient face regions without storing images/boxes."""
+        """Sample bounded object boxes and transient face counts from source frames."""
         self._load()
         capture = cv2.VideoCapture(str(video_path))
         try:
@@ -282,22 +327,35 @@ class OpenCVZooModels:
             duration = frame_count / fps
             if not math.isfinite(duration) or duration <= 0 or duration > maximum_duration_seconds:
                 raise DetectorUnavailable("VIDEO_DURATION_INVALID")
-            last_offset = min(
-                int(duration), (MAX_OBJECT_SAMPLES - 1) * OBJECT_SAMPLE_INTERVAL_SECONDS
-            )
+            frame_indices = bounded_sample_frame_indices(int(frame_count), MAX_OBJECT_SAMPLES)
             counts: Counter[str] = Counter()
             confidence_sums: dict[str, float] = {}
             confidence_counts: Counter[str] = Counter()
             face_frames = 0
             face_regions = 0
             sampled = 0
-            for second in range(0, last_offset + 1, OBJECT_SAMPLE_INTERVAL_SECONDS):
+            decode_failures = 0
+            previous_timestamp: int | None = None
+            timestamp_chain_reliable = True
+            object_detections: list[ObjectDetection] = []
+            detection_limit_reached = False
+            for frame_index in frame_indices:
                 if time.monotonic() >= deadline_monotonic:
                     raise TimeoutError("VIDEO_DETECTOR_TIMEOUT")
-                capture.set(cv2.CAP_PROP_POS_MSEC, second * 1000)
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                 decoded, frame = capture.read()
                 if not decoded or frame is None:
+                    decode_failures += 1
                     continue
+                timestamp_ms: int | None = None
+                if timestamp_chain_reliable:
+                    timestamp_ms = decoder_timestamp_ms(
+                        float(capture.get(cv2.CAP_PROP_POS_MSEC)), previous_timestamp
+                    )
+                    if timestamp_ms is None:
+                        timestamp_chain_reliable = False
+                    else:
+                        previous_timestamp = timestamp_ms
                 objects = self.detect_objects(frame)
                 if time.monotonic() >= deadline_monotonic:
                     raise TimeoutError("VIDEO_DETECTOR_TIMEOUT")
@@ -308,10 +366,27 @@ class OpenCVZooModels:
                 if face_count:
                     face_frames += 1
                     face_regions += face_count
-                for label, confidence in objects:
-                    counts[label] += 1
-                    confidence_sums[label] = confidence_sums.get(label, 0.0) + confidence
-                    confidence_counts[label] += 1
+                for detection in objects:
+                    counts[detection.class_name] += 1
+                    confidence_sums[detection.class_name] = (
+                        confidence_sums.get(detection.class_name, 0.0) + detection.score
+                    )
+                    confidence_counts[detection.class_name] += 1
+                    if len(object_detections) < MAX_DETECTIONS_PER_VIDEO:
+                        object_detections.append(
+                            ObjectDetection(
+                                class_name=detection.class_name,
+                                score=detection.score,
+                                box=detection.box,
+                                frame_index=frame_index,
+                                timestamp_ms=timestamp_ms,
+                                timestamp_status="known" if timestamp_ms is not None else "unknown",
+                                detector_version=detection.detector_version,
+                                evidence_id=evidence_id,
+                            )
+                        )
+                    else:
+                        detection_limit_reached = True
             observations = [
                 {
                     "class_name": label,
@@ -324,9 +399,19 @@ class OpenCVZooModels:
                 "object_detector": YOLOX_VERSION,
                 "object_model_sha256": YOLOX_SHA256,
                 "object_taxonomy": "COCO-80",
-                "object_sample_interval_seconds": OBJECT_SAMPLE_INTERVAL_SECONDS,
+                "object_sample_interval_seconds": None,
                 "object_sampled_frames": sampled,
+                "object_decode_failures": decode_failures,
                 "object_observations": observations,
+                "object_detections": [
+                    detection.model_dump(mode="json") for detection in object_detections
+                ],
+                "object_detection_limit_reached": detection_limit_reached,
+                "object_timestamp_status": (
+                    "available"
+                    if timestamp_chain_reliable and previous_timestamp is not None
+                    else "unknown"
+                ),
                 "face_region_detector": YUNET_VERSION,
                 "face_model_sha256": YUNET_SHA256,
                 "face_region_sampled_frames": sampled,

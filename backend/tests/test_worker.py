@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -12,9 +13,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.datastructures import Headers, UploadFile
 
+from app import worker as worker_module
 from app.core.config import AppSettings
-from app.db.models import ProcessingJob, Source
+from app.db.models import Evidence, ProcessingJob, Source
 from app.media.uploads import stage_video_upload
+from app.services.video_types import QualityThresholds
 from app.worker import claim_next_job, run_once, sample_quality
 
 
@@ -33,6 +36,7 @@ def _job_factory() -> tuple[sessionmaker[Session], Engine]:
     )
     Source.__table__.create(engine)
     ProcessingJob.__table__.create(engine)
+    Evidence.__table__.create(engine)
     return sessionmaker(bind=engine, expire_on_commit=False), engine
 
 
@@ -152,9 +156,15 @@ def test_quality_sampling_returns_measurements_without_event_predictions(
 
     result = sample_quality(fixture, 60)
 
-    assert result["sampled_frames"] == 2
+    assert result["sampled_frames"] == 6
     assert result["mean_luma_0_255"] == 128.0
     assert result["event_detection"] == "not_configured"
+    timestamp_metric = next(
+        metric
+        for metric in result["quality_measurements"]
+        if metric["metric"] == "source_timestamp_availability"
+    )
+    assert timestamp_metric["status"] == "unavailable"
 
 
 def test_real_opencv_upload_and_quality_path_on_small_generated_avi(tmp_path: Path) -> None:
@@ -181,10 +191,51 @@ def test_real_opencv_upload_and_quality_path_on_small_generated_avi(tmp_path: Pa
     staged_path, duration, result = asyncio.run(validate())
     try:
         assert duration == 2.0
-        assert result["sampled_frames"] == 1
+        assert result["sampled_frames"] == 10
         assert result["event_detection"] == "not_configured"
     finally:
         staged_path.unlink(missing_ok=True)
+
+
+def test_quality_threshold_marks_low_quality_uncertain_without_event_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Capture:
+        def isOpened(self) -> bool:
+            return True
+
+        def get(self, prop: int) -> float:
+            return {
+                cv2.CAP_PROP_FPS: 1.0,
+                cv2.CAP_PROP_FRAME_COUNT: 2.0,
+                cv2.CAP_PROP_FRAME_WIDTH: 32.0,
+                cv2.CAP_PROP_FRAME_HEIGHT: 32.0,
+                cv2.CAP_PROP_POS_MSEC: 0.0,
+            }.get(prop, 0.0)
+
+        def set(self, _prop: int, _value: float) -> bool:
+            return True
+
+        def read(self) -> tuple[bool, np.ndarray]:
+            return True, np.zeros((32, 32, 3), dtype=np.uint8)
+
+        def release(self) -> None:
+            return None
+
+    monkeypatch.setattr(cv2, "VideoCapture", lambda _path: Capture())
+    fixture = tmp_path / "dark.mp4"
+    fixture.write_bytes(b"fixture")
+
+    result = sample_quality(
+        fixture,
+        60,
+        thresholds=QualityThresholds(minimum_mean_luma=10, minimum_laplacian_variance=1),
+    )
+
+    assert result["quality_result_status"] == "uncertain"
+    assert "MEAN_BRIGHTNESS_BELOW_MINIMUM" in result["quality_uncertainty_reasons"]
+    assert "LAPLACIAN_VARIANCE_BELOW_MINIMUM" in result["quality_uncertainty_reasons"]
+    assert result["event_detection"] == "not_configured"
 
 
 def test_worker_defaults_do_not_enable_detection() -> None:
@@ -192,6 +243,97 @@ def test_worker_defaults_do_not_enable_detection() -> None:
 
     assert settings.detector_backend == "simulated"
     assert settings.detector_version == "simulated-v1"
+
+
+def test_worker_cancellation_removes_temporary_video_and_closes_storage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    from pydantic import SecretStr
+
+    factory, engine = _job_factory()
+    source_id, evidence_id, job_id = uuid4(), uuid4(), uuid4()
+    with factory() as database:
+        database.add(
+            Source(
+                id=source_id,
+                name="temporary test source",
+                source_type="uploaded_clip",
+                status="processing",
+                configuration={},
+            )
+        )
+        database.add(
+            Evidence(
+                id=evidence_id,
+                source_id=source_id,
+                evidence_type="original_video",
+                storage_backend="object",
+                storage_key="test/video.mp4",
+                mime_type="video/mp4",
+                byte_size=128,
+                status="available",
+            )
+        )
+        database.add(
+            ProcessingJob(
+                id=job_id,
+                job_type="source_processing",
+                source_id=source_id,
+                status="pending",
+                attempt_count=0,
+                max_attempts=3,
+                available_at=datetime.now(UTC) - timedelta(seconds=1),
+                result_metadata={"evidence_id": str(evidence_id)},
+            )
+        )
+        database.commit()
+
+    temp_paths: list[Path] = []
+    original_named_temp = tempfile.NamedTemporaryFile
+
+    def temporary_in_test_dir(*args: object, **kwargs: object) -> object:
+        kwargs["dir"] = tmp_path
+        return original_named_temp(*args, **kwargs)
+
+    monkeypatch.setattr(worker_module.tempfile, "NamedTemporaryFile", temporary_in_test_dir)
+    started = asyncio.Event()
+    closed = False
+
+    class BlockingStorage:
+        def __init__(self, _settings: AppSettings) -> None:
+            pass
+
+        async def download_to_path(self, _key: str, path: Path, *, maximum_bytes: int) -> int:
+            assert maximum_bytes > 0
+            temp_paths.append(path)
+            started.set()
+            await asyncio.Event().wait()
+
+        async def close(self) -> None:
+            nonlocal closed
+            closed = True
+
+    monkeypatch.setattr(worker_module, "SupabaseStorage", BlockingStorage)
+    settings = AppSettings(
+        storage_backend="supabase",
+        supabase_url="https://storage.example.test",
+        supabase_service_role_key=SecretStr("test-only"),
+    )
+
+    async def run_and_cancel() -> None:
+        task = asyncio.create_task(worker_module.run_once(factory, settings))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run_and_cancel())
+    assert closed
+    assert len(temp_paths) == 1
+    assert not temp_paths[0].exists()
+    engine.dispose()
 
 
 def test_source_context_job_fails_safely_when_provider_is_not_configured() -> None:

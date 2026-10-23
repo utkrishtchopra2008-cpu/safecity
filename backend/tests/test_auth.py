@@ -399,7 +399,35 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
         attempt_count=2,
         error_code="INTERNAL_PATH_DISCLOSED",
         error_summary="Sensitive provider diagnostic",
-        result_metadata={"duration_seconds": 1.5, "private_path": "/srv/private/video.mp4"},
+        result_metadata={
+            "duration_seconds": 1.5,
+            "private_path": "/srv/private/video.mp4",
+            "object_detections": [
+                {
+                    "class_name": "person",
+                    "score": 0.75,
+                    "score_semantics": "uncalibrated_model_score",
+                    "box": {"x_min": 0.1, "y_min": 0.1, "x_max": 0.5, "y_max": 0.8},
+                    "frame_index": 3,
+                    "timestamp_ms": 1200,
+                    "timestamp_status": "known",
+                    "detector_version": "verified-model-v1",
+                    "evidence_id": str(uuid.uuid4()),
+                },
+                {"private_path": "/srv/private"},
+            ],
+            "quality_measurements": [
+                {
+                    "metric": "laplacian_variance",
+                    "value": 12.0,
+                    "unit": "gray_level_squared",
+                    "algorithm": "test algorithm",
+                    "algorithm_version": "1",
+                    "configuration": {},
+                    "status": "measured",
+                }
+            ],
+        },
     )
     another_users_job_data = vars(job) | {
         "id": another_users_job_id,
@@ -434,7 +462,12 @@ def test_operator_can_read_owned_job_without_sensitive_diagnostics(
     operator_system_status = auth_client.get("/api/v1/system/status")
 
     assert response.status_code == 200
-    assert response.json()["result_metadata"] == {"duration_seconds": 1.5}
+    metadata = response.json()["result_metadata"]
+    assert metadata["duration_seconds"] == 1.5
+    assert len(metadata["object_detections"]) == 1
+    assert metadata["object_detections"][0]["frame_index"] == 3
+    assert len(metadata["quality_measurements"]) == 1
+    assert "private_path" not in metadata
     assert response.json()["error_code"] is None
     assert response.json()["error_summary"] is None
     assert unauthorized_job.status_code == 404

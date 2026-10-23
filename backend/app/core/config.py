@@ -39,6 +39,9 @@ class AppSettings(BaseModel):
     detector_backend: Literal["simulated", "opencv_zoo"] = "simulated"
     detector_version: str = "simulated-v1"
     detector_model_dir: Path = Path("../.data/models")
+    quality_min_mean_luma: float | None = Field(default=None, ge=0, le=255)
+    quality_max_mean_luma: float | None = Field(default=None, ge=0, le=255)
+    quality_min_laplacian_variance: float | None = Field(default=None, ge=0)
     worker_poll_interval_seconds: float = Field(default=2.0, gt=0, le=300)
     worker_max_attempts: int = Field(default=3, ge=1, le=20)
     tinyfish_context_enabled: bool = False
@@ -53,6 +56,9 @@ class AppSettings(BaseModel):
         "tinyfish_api_key",
         "supabase_service_role_key",
         "session_csrf_secret",
+        "quality_min_mean_luma",
+        "quality_max_mean_luma",
+        "quality_min_laplacian_variance",
         mode="before",
     )
     @classmethod
@@ -133,6 +139,12 @@ class AppSettings(BaseModel):
     def validate_production_requirements(self) -> AppSettings:
         if self.session_idle_ttl_seconds > self.session_ttl_seconds:
             raise ValueError("SESSION_IDLE_TTL_SECONDS must not exceed SESSION_TTL_SECONDS")
+        if (
+            self.quality_min_mean_luma is not None
+            and self.quality_max_mean_luma is not None
+            and self.quality_min_mean_luma > self.quality_max_mean_luma
+        ):
+            raise ValueError("QUALITY_MIN_MEAN_LUMA must not exceed QUALITY_MAX_MEAN_LUMA")
         if self.app_env == "production":
             if self.database_url is None:
                 raise ValueError("DATABASE_URL is required in production")
@@ -187,6 +199,9 @@ class AppSettings(BaseModel):
             "DETECTOR_BACKEND": "detector_backend",
             "DETECTOR_VERSION": "detector_version",
             "DETECTOR_MODEL_DIR": "detector_model_dir",
+            "QUALITY_MIN_MEAN_LUMA": "quality_min_mean_luma",
+            "QUALITY_MAX_MEAN_LUMA": "quality_max_mean_luma",
+            "QUALITY_MIN_LAPLACIAN_VARIANCE": "quality_min_laplacian_variance",
             "WORKER_POLL_INTERVAL_SECONDS": "worker_poll_interval_seconds",
             "WORKER_MAX_ATTEMPTS": "worker_max_attempts",
             "TINYFISH_CONTEXT_ENABLED": "tinyfish_context_enabled",

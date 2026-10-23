@@ -224,6 +224,24 @@ export function SourceAdminPanel() {
                       </li>
                     </ul>
                   ) : null}
+                  {job.data.result_metadata.quality_result_status === 'uncertain' ? (
+                    <div className="warning-panel" role="status">
+                      <p>Video quality is uncertain. Review the footage before relying on it.</p>
+                      {Array.isArray(job.data.result_metadata.quality_uncertainty_reasons) ? (
+                        <ul>
+                          {job.data.result_metadata.quality_uncertainty_reasons
+                            .filter((reason): reason is string => typeof reason === 'string')
+                            .map((reason) => (
+                              <li key={reason}>{reason.replaceAll('_', ' ')}</li>
+                            ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : job.data.result_metadata.quality_result_status === 'not_evaluated' ? (
+                    <p>
+                      Quality thresholds are not configured; measurements are observations only.
+                    </p>
+                  ) : null}
                   {observations.length ? (
                     <ul>
                       {observations.map((observation) => (

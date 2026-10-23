@@ -104,6 +104,8 @@ describe('SourceAdminPanel', () => {
             result_metadata: {
               mean_luma_0_255: 42.5,
               mean_laplacian_variance: 13.2,
+              quality_result_status: 'uncertain',
+              quality_uncertainty_reasons: ['MEAN_BRIGHTNESS_BELOW_MINIMUM'],
               incident_detector: 'not_implemented',
               object_observations: [{ class_name: 'person', sample_count: 1, mean_score: 0.91 }],
             },
@@ -127,6 +129,8 @@ describe('SourceAdminPanel', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(await screen.findByText(/person: observed in 1 sampled frames/)).toBeInTheDocument();
+    expect(screen.getByText(/Video quality is uncertain/)).toBeInTheDocument();
+    expect(screen.getByText('MEAN BRIGHTNESS BELOW MINIMUM')).toBeInTheDocument();
     expect(screen.getByText('Event detection is not configured.')).toBeInTheDocument();
     expect(
       screen.getByText(/Object observations are not incident classifications/),

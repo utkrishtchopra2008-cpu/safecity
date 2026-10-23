@@ -27,9 +27,16 @@ SUPPORTED_MEDIA = {
 class UploadValidationError(ValueError):
     """The uploaded file is not an acceptable supported video."""
 
+    def __init__(self, message: str, *, code: str = "VIDEO_INVALID") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class UploadTooLarge(UploadValidationError):
     """The streamed upload exceeded the configured byte limit."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, code="VIDEO_TOO_LARGE")
 
 
 @dataclass(frozen=True)
@@ -61,7 +68,9 @@ def _inspect_video(path: Path, maximum_duration: int) -> tuple[float, int, int]:
     capture = cv2.VideoCapture(str(path))
     try:
         if not capture.isOpened():
-            raise UploadValidationError("The video decoder could not open this file")
+            raise UploadValidationError(
+                "The video decoder could not open this file", code="VIDEO_UNSUPPORTED_CODEC"
+            )
         fps = float(capture.get(cv2.CAP_PROP_FPS))
         frame_count = float(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -81,7 +90,9 @@ def _inspect_video(path: Path, maximum_duration: int) -> tuple[float, int, int]:
             raise UploadValidationError("The video duration is invalid or exceeds the configured limit")
         decoded, frame = capture.read()
         if not decoded or frame is None:
-            raise UploadValidationError("The video contains no decodable frame")
+            raise UploadValidationError(
+                "The video contains no decodable frame", code="VIDEO_CORRUPT_OR_TRUNCATED"
+            )
         return duration, width, height
     finally:
         capture.release()
@@ -92,7 +103,10 @@ async def stage_video_upload(file: UploadFile, settings: AppSettings) -> StagedV
     suffix = Path(file.filename or "").suffix.lower()
     media = SUPPORTED_MEDIA.get(suffix)
     if media is None or file.content_type != media[0]:
-        raise UploadValidationError("Use a supported video extension and matching media type")
+        raise UploadValidationError(
+            "Use a supported video extension and matching media type",
+            code="VIDEO_UNSUPPORTED_CODEC",
+        )
 
     descriptor, temporary_name = tempfile.mkstemp(prefix="safecity-upload-", suffix=suffix)
     path = Path(temporary_name)
@@ -109,8 +123,13 @@ async def stage_video_upload(file: UploadFile, settings: AppSettings) -> StagedV
                     prefix.extend(chunk[: 32 - len(prefix)])
                 digest.update(chunk)
                 destination.write(chunk)
-        if size == 0 or not _matches_signature(bytes(prefix), media[1]):
-            raise UploadValidationError("The uploaded content does not match the declared video format")
+        if size == 0:
+            raise UploadValidationError("The uploaded file is empty", code="VIDEO_EMPTY")
+        if not _matches_signature(bytes(prefix), media[1]):
+            raise UploadValidationError(
+                "The uploaded content does not match the declared video format",
+                code="VIDEO_INVALID_SIGNATURE",
+            )
         duration, width, height = _inspect_video(path, settings.max_upload_duration_seconds)
         return StagedVideo(path, size, digest.hexdigest(), media[0], duration, width, height)
     except Exception:

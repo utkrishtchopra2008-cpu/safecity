@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from uuid import uuid4
 
 import cv2
 import numpy as np
@@ -39,6 +40,11 @@ def test_model_checksum_rejects_changed_bytes(tmp_path: Path) -> None:
         verify_model(artifact, YOLOX_SHA256)
 
 
+def test_missing_model_artifact_fails_as_unavailable(tmp_path: Path) -> None:
+    with pytest.raises(DetectorUnavailable, match="MODEL_UNAVAILABLE"):
+        verify_model(tmp_path / "not-downloaded.onnx", YOLOX_SHA256)
+
+
 def test_object_output_is_normalized_to_observations_only() -> None:
     output = np.zeros((1, 8400, 85), dtype=np.float32)
     output[0, 0, 4] = 1.0
@@ -47,15 +53,32 @@ def test_object_output_is_normalized_to_observations_only() -> None:
     models._object_net = FakeNet(output)  # type: ignore[assignment]
     models._face_detector = object()
 
+    # YOLOX decoded center at (4, 4) and a positive 8x8 box on the first stride.
+    output[0, 0, 2:4] = np.log(1.0)
     observations = models.detect_objects(np.zeros((240, 320, 3), dtype=np.uint8))
 
-    assert observations == [("person", 0.95)]
-    assert all(category not in {"crime", "assault", "incident"} for category, _ in observations)
+    assert len(observations) == 1
+    assert observations[0].class_name == "person"
+    assert observations[0].score == 0.95
+    assert 0 <= observations[0].box.x_min < observations[0].box.x_max <= 1
+    assert 0 <= observations[0].box.y_min < observations[0].box.y_max <= 1
+    assert "incident" not in observations[0].class_name
 
 
 def test_object_output_shape_is_checked_before_use() -> None:
     models = OpenCVZooModels(Path("unused"))
     models._object_net = FakeNet(np.zeros((1, 1, 6), dtype=np.float32))  # type: ignore[assignment]
+    models._face_detector = object()
+    with pytest.raises(DetectorUnavailable, match="OBJECT_OUTPUT_INVALID"):
+        models.detect_objects(np.zeros((240, 320, 3), dtype=np.uint8))
+
+
+def test_object_output_rejects_invalid_scores() -> None:
+    output = np.zeros((1, 8400, 85), dtype=np.float32)
+    output[0, 0, 4] = 1.1
+    output[0, 0, 5] = 1.0
+    models = OpenCVZooModels(Path("unused"))
+    models._object_net = FakeNet(output)  # type: ignore[assignment]
     models._face_detector = object()
     with pytest.raises(DetectorUnavailable, match="OBJECT_OUTPUT_INVALID"):
         models.detect_objects(np.zeros((240, 320, 3), dtype=np.uint8))
@@ -108,9 +131,10 @@ def test_verified_models_sample_video_with_bounded_metadata(tmp_path: Path) -> N
         video_path,
         maximum_duration_seconds=900,
         deadline_monotonic=time.monotonic() + 30,
+        evidence_id=uuid4(),
     )
 
-    assert result["object_sampled_frames"] == 1
+    assert result["object_sampled_frames"] == 10
     assert result["object_taxonomy"] == "COCO-80"
     assert result["incident_detector"] == "not_implemented"
     assert result["object_observations"] == []

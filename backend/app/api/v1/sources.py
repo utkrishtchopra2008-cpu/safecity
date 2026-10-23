@@ -374,9 +374,9 @@ async def upload_source(
     try:
         staged = await stage_video_upload(file, settings)
     except UploadTooLarge as exc:
-        raise HTTPException(status_code=413, detail="FILE_TOO_LARGE") from exc
+        raise HTTPException(status_code=413, detail=exc.code) from exc
     except UploadValidationError as exc:
-        raise HTTPException(status_code=415, detail="UNSUPPORTED_MEDIA_TYPE") from exc
+        raise HTTPException(status_code=415, detail=exc.code) from exc
     finally:
         await file.close()
 

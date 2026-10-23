@@ -44,3 +44,17 @@ The root specifications define a complete product, while this checkout now conta
 - **Fail closed on signed object keys:** use the same relative-key/traversal validation for signed URL requests as uploads, reads, existence checks, and deletion. This is a defensive storage-boundary fix and does not alter the API or key format.
 - **Live Supabase remains unverified:** the code and docs require a private bucket and deny direct anon/authenticated access; service-role requests bypass RLS, so backend role/resource authorization remains required. Do not report RLS, live signed access, or orphan cleanup as verified without a configured non-production project.
 - **No hosted-service credentials:** no Supabase URL or service-role key is configured. Local PostgreSQL verification and HTTP mocks passed, but they do not establish live Supabase RLS, private bucket configuration, signed access, or cleanup behavior. Do not invent credentials or present those external checks as passed.
+# Prompt 3 decisions
+
+## Object-observation API detail
+
+- **Conflict:** `API.md` previously limited model output to aggregate class summaries and explicitly excluded boxes. Prompt 3 now requires bounded object records with normalized coordinates, frame index, source timestamp state, model version, score semantics, and evidence reference.
+- **Decision:** adopt the newer explicit Prompt 3 requirement and update `API.md` together with the implementation. Return at most 500 strictly typed object observations to the authorized job owner or technical administrator. Preserve the prior face-privacy rule: return only aggregate face-region counts, no face boxes, crops, landmarks, or image bytes. Object records remain observations only and cannot create/classify incidents.
+
+## Quality threshold policy
+
+- PRD/implementation decisions leave product quality thresholds unsettled. Therefore `.env.example` documents optional thresholds but defaults them to unset. Measured quality fields are still returned; aggregate status is `not_evaluated` until a threshold is configured, then `uncertain` if a configured threshold is breached. No default threshold or incident meaning is inferred.
+
+## Cancellation semantics
+
+- API/database contracts do not define a user-visible cancellation state or endpoint. This phase tests Python task interruption cleanup and leaves durable cancellation semantics unchanged; no new endpoint, state, or retention rule is inferred.

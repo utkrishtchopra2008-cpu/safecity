@@ -51,8 +51,22 @@ def test_upload_size_is_checked_while_streaming(monkeypatch: pytest.MonkeyPatch)
             upload_file(valid_mp4_header()), AppSettings(max_upload_bytes=16)
         )
 
-    with pytest.raises(uploads.UploadTooLarge):
+    with pytest.raises(uploads.UploadTooLarge) as error:
         asyncio.run(run())
+    assert error.value.code == "VIDEO_TOO_LARGE"
+
+
+def test_empty_upload_has_a_typed_failure_and_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(uploads, "_inspect_video", lambda *_args: pytest.fail("decoder called"))
+
+    async def run() -> None:
+        await uploads.stage_video_upload(upload_file(b""), AppSettings())
+
+    with pytest.raises(uploads.UploadValidationError) as error:
+        asyncio.run(run())
+    assert error.value.code == "VIDEO_EMPTY"
 
 
 def test_mismatched_content_signature_is_rejected_before_decode(

@@ -14,7 +14,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import cv2
@@ -26,7 +26,9 @@ from app.core.config import AppSettings, get_settings
 from app.db.models import Evidence, ProcessingJob, Source
 from app.db.session import get_engine
 from app.services.context_jobs import process_context_job
-from app.services.opencv_models import DetectorUnavailable, OpenCVZooModels
+from app.services.opencv_models import DetectorAdapter, DetectorUnavailable, OpenCVZooModels
+from app.services.video_sampling import bounded_sample_frame_indices, decoder_timestamp_ms
+from app.services.video_types import QualityMeasurement, QualityThresholds
 from app.storage.supabase import StorageUnavailable, SupabaseStorage
 
 logger = logging.getLogger("safecity.worker")
@@ -34,11 +36,33 @@ CLAIM_LEASE_SECONDS = 180
 MAX_SAMPLES = 181
 SAMPLE_INTERVAL_SECONDS = 5
 MAX_JOB_SECONDS = 120
+MAX_STALE_TEMP_AGE_SECONDS = CLAIM_LEASE_SECONDS * 2 + MAX_JOB_SECONDS
 
 
 @lru_cache(maxsize=1)
-def _get_opencv_models(model_directory: Path) -> OpenCVZooModels:
+def _get_opencv_models(model_directory: Path) -> DetectorAdapter:
     return OpenCVZooModels(model_directory)
+
+
+def cleanup_stale_worker_temps(
+    directory: Path | None = None, *, now_seconds: float | None = None, maximum_files: int = 1000
+) -> int:
+    """Remove only old regular worker temp files left by a prior process crash."""
+    temporary_directory = directory or Path(tempfile.gettempdir())
+    cutoff = (time.time() if now_seconds is None else now_seconds) - MAX_STALE_TEMP_AGE_SECONDS
+    removed = 0
+    for index, path in enumerate(temporary_directory.glob("safecity-worker-*")):
+        if index >= maximum_files:
+            break
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+                removed += 1
+        except FileNotFoundError:
+            continue
+    return removed
 
 
 def claim_next_job(database: OrmSession, now: datetime | None = None) -> ProcessingJob | None:
@@ -114,8 +138,9 @@ def sample_quality(
     maximum_duration_seconds: int,
     *,
     deadline_monotonic: float | None = None,
+    thresholds: QualityThresholds | None = None,
 ) -> dict[str, Any]:
-    """Measure coarse video quality on bounded samples without retaining any frames."""
+    """Measure supported video facts on bounded samples without retaining frames."""
     capture = cv2.VideoCapture(str(path))
     try:
         if not capture.isOpened():
@@ -137,33 +162,170 @@ def sample_quality(
         duration = frame_count / fps
         if not math.isfinite(duration) or duration <= 0 or duration > maximum_duration_seconds:
             raise ValueError("VIDEO_DURATION_INVALID")
+        samples = bounded_sample_frame_indices(int(frame_count), MAX_SAMPLES)
         brightness: list[float] = []
         sharpness: list[float] = []
+        decode_failures = 0
+        timestamps: list[int] = []
+        timestamp_chain_reliable = True
         started = time.monotonic()
-        last_offset = min(int(duration), (MAX_SAMPLES - 1) * SAMPLE_INTERVAL_SECONDS)
-        for second in range(0, last_offset + 1, SAMPLE_INTERVAL_SECONDS):
+        for frame_index in samples:
             if time.monotonic() - started > MAX_JOB_SECONDS or (
                 deadline_monotonic is not None and time.monotonic() >= deadline_monotonic
             ):
                 raise TimeoutError("VIDEO_QUALITY_TIMEOUT")
-            capture.set(cv2.CAP_PROP_POS_MSEC, second * 1000)
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             decoded, frame = capture.read()
             if not decoded or frame is None:
+                decode_failures += 1
                 continue
+            if timestamp_chain_reliable:
+                position_ms = float(capture.get(cv2.CAP_PROP_POS_MSEC))
+                previous = timestamps[-1] if timestamps else None
+                timestamp = decoder_timestamp_ms(position_ms, previous)
+                if timestamp is None:
+                    timestamp_chain_reliable = False
+                else:
+                    timestamps.append(timestamp)
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             brightness.append(float(gray.mean()))
             sharpness.append(float(cv2.Laplacian(gray, cv2.CV_64F).var()))
         if not brightness:
             raise ValueError("VIDEO_NO_SAMPLED_FRAMES")
+        mean_luma = round(sum(brightness) / len(brightness), 3)
+        mean_sharpness = round(sum(sharpness) / len(sharpness), 3)
+        configured_thresholds = thresholds or QualityThresholds()
+        threshold_configured = any(
+            value is not None for value in configured_thresholds.model_dump().values()
+        )
+        uncertainty_reasons: list[str] = []
+        brightness_status: Literal["measured", "below_threshold", "above_threshold"] = "measured"
+        brightness_reason = None
+        brightness_limits: dict[str, float] = {}
+        if configured_thresholds.minimum_mean_luma is not None:
+            brightness_limits["minimum"] = configured_thresholds.minimum_mean_luma
+            if mean_luma < configured_thresholds.minimum_mean_luma:
+                brightness_status = "below_threshold"
+                brightness_reason = "MEAN_BRIGHTNESS_BELOW_MINIMUM"
+                uncertainty_reasons.append(brightness_reason)
+        if configured_thresholds.maximum_mean_luma is not None:
+            brightness_limits["maximum"] = configured_thresholds.maximum_mean_luma
+            if mean_luma > configured_thresholds.maximum_mean_luma:
+                brightness_status = "above_threshold"
+                brightness_reason = "MEAN_BRIGHTNESS_ABOVE_MAXIMUM"
+                uncertainty_reasons.append(brightness_reason)
+        sharpness_status: Literal["measured", "below_threshold"] = "measured"
+        sharpness_reason = None
+        sharpness_limits: dict[str, float] = {}
+        if configured_thresholds.minimum_laplacian_variance is not None:
+            sharpness_limits["minimum"] = configured_thresholds.minimum_laplacian_variance
+            if mean_sharpness < configured_thresholds.minimum_laplacian_variance:
+                sharpness_status = "below_threshold"
+                sharpness_reason = "LAPLACIAN_VARIANCE_BELOW_MINIMUM"
+                uncertainty_reasons.append(sharpness_reason)
+        if decode_failures:
+            uncertainty_reasons.append("SAMPLED_FRAME_DECODE_FAILURES")
+        timestamp_ratio = len(timestamps) / len(samples)
+        if len(timestamps) != len(samples) or not timestamp_chain_reliable:
+            timestamp_status: Literal["measured", "unavailable"] = "unavailable"
+            timestamp_reason = "SOURCE_TIMESTAMPS_UNAVAILABLE_OR_UNRELIABLE"
+        else:
+            timestamp_status = "measured"
+            timestamp_reason = None
+        measurements = [
+            QualityMeasurement(
+                metric="resolution",
+                value={"width": width, "height": height},
+                unit="pixels",
+                algorithm="OpenCV VideoCapture stream properties",
+                algorithm_version=cv2.__version__,
+                configuration={"maximum_frame_pixels": 25_000_000},
+                status="measured",
+            ),
+            QualityMeasurement(
+                metric="mean_luma",
+                value=mean_luma,
+                unit="gray_level_0_255",
+                algorithm="OpenCV BGR-to-gray followed by NumPy arithmetic mean",
+                algorithm_version="opencv-quality-v2",
+                configuration={"maximum_samples": MAX_SAMPLES, "sampling": "uniform_frame_index"},
+                threshold=brightness_limits or None,
+                status=brightness_status,
+                reason_code=brightness_reason,
+            ),
+            QualityMeasurement(
+                metric="laplacian_variance",
+                value=mean_sharpness,
+                unit="gray_level_squared",
+                algorithm="variance of CV_64F Laplacian over grayscale samples",
+                algorithm_version="opencv-quality-v2",
+                configuration={"maximum_samples": MAX_SAMPLES, "sampling": "uniform_frame_index"},
+                threshold=sharpness_limits or None,
+                status=sharpness_status,
+                reason_code=sharpness_reason,
+            ),
+            QualityMeasurement(
+                metric="decoded_sample_frames",
+                value=len(brightness),
+                unit="frames",
+                algorithm="OpenCV VideoCapture.read",
+                algorithm_version=cv2.__version__,
+                configuration={"requested_sample_frames": len(samples)},
+                status="measured",
+            ),
+            QualityMeasurement(
+                metric="sampled_frame_decode_failures",
+                value=decode_failures,
+                unit="frames",
+                algorithm="OpenCV VideoCapture.read",
+                algorithm_version=cv2.__version__,
+                configuration={"requested_sample_frames": len(samples)},
+                threshold={"maximum": 0.0},
+                status="above_threshold" if decode_failures else "measured",
+                reason_code="SAMPLED_FRAME_DECODE_FAILURES" if decode_failures else None,
+            ),
+            QualityMeasurement(
+                metric="nominal_fps",
+                value=round(fps, 6),
+                unit="frames_per_second",
+                algorithm="OpenCV VideoCapture CAP_PROP_FPS metadata",
+                algorithm_version=cv2.__version__,
+                configuration={"used_for_timestamps": False},
+                status="measured",
+            ),
+            QualityMeasurement(
+                metric="source_timestamp_availability",
+                value=round(timestamp_ratio, 4),
+                unit="fraction_of_requested_samples",
+                algorithm="OpenCV VideoCapture CAP_PROP_POS_MSEC after decode; no FPS inference",
+                algorithm_version=cv2.__version__,
+                configuration={"requested_sample_frames": len(samples)},
+                status=timestamp_status,
+                reason_code=timestamp_reason,
+            ),
+        ]
         return {
-            "quality_observation_version": "opencv-quality-v1",
+            "quality_observation_version": "opencv-quality-v2",
             "duration_seconds": round(duration, 3),
             "width": width,
             "height": height,
             "sampled_frames": len(brightness),
-            "sample_interval_seconds": SAMPLE_INTERVAL_SECONDS,
-            "mean_luma_0_255": round(sum(brightness) / len(brightness), 3),
-            "mean_laplacian_variance": round(sum(sharpness) / len(sharpness), 3),
+            "requested_sample_frames": len(samples),
+            "sample_interval_seconds": None,
+            "mean_luma_0_255": mean_luma,
+            "mean_laplacian_variance": mean_sharpness,
+            "quality_measurements": [
+                measurement.model_dump(mode="json") for measurement in measurements
+            ],
+            "quality_result_status": (
+                "uncertain"
+                if uncertainty_reasons
+                else "measured"
+                if threshold_configured
+                else "not_evaluated"
+            ),
+            "quality_uncertainty_reasons": uncertainty_reasons,
+            "source_timestamp_availability": round(timestamp_ratio, 4),
             "event_detection": "not_configured",
         }
     finally:
@@ -290,10 +452,16 @@ async def run_once(factory: sessionmaker[OrmSession], settings: AppSettings) -> 
             storage_key, temporary_path, maximum_bytes=settings.max_upload_bytes
         )
         deadline = time.monotonic() + MAX_JOB_SECONDS
+        quality_thresholds = QualityThresholds(
+            minimum_mean_luma=settings.quality_min_mean_luma,
+            maximum_mean_luma=settings.quality_max_mean_luma,
+            minimum_laplacian_variance=settings.quality_min_laplacian_variance,
+        )
         measurements = sample_quality(
             temporary_path,
             settings.max_upload_duration_seconds,
             deadline_monotonic=deadline,
+            thresholds=quality_thresholds,
         )
         if settings.detector_backend == "opencv_zoo":
             measurements.update(
@@ -301,6 +469,7 @@ async def run_once(factory: sessionmaker[OrmSession], settings: AppSettings) -> 
                     temporary_path,
                     maximum_duration_seconds=settings.max_upload_duration_seconds,
                     deadline_monotonic=deadline,
+                    evidence_id=evidence_id,
                 )
             )
         measurements["downloaded_bytes"] = byte_size
@@ -359,7 +528,10 @@ async def serve() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     settings = get_settings()
     factory = sessionmaker(bind=get_engine(), expire_on_commit=False)
+    stale_files_removed = cleanup_stale_worker_temps()
     logger.info("worker_started detector_backend=%s", settings.detector_backend)
+    if stale_files_removed:
+        logger.info("worker_stale_temporary_files_removed count=%d", stale_files_removed)
     while True:
         try:
             found_job = await run_once(factory, settings)

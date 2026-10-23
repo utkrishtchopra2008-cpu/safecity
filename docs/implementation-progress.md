@@ -96,3 +96,35 @@ Prompt 1 audit gate is complete. Exact next phase: **Prompt 2**.
 - **P1:** maintain model/revision parity when schema changes; expand route-level ownership and storage crash-window tests as part of the relevant phases.
 
 Prompt 2 local completion gate is met. Exact next phase: **Prompt 3**. Live Supabase policy/access verification remains an explicitly recorded external BLOCKED/NOT RUN item, as required when credentials are unavailable.
+
+## Prompt 3 — OpenCV video pipeline and verified detection
+
+**Status:** PARTIAL — bounded OpenCV quality sampling and typed detector output contracts are implemented and tested. Pinned detector weights are not present locally, so artifact-backed model execution remains NOT RUN and the runtime must report `MODEL_UNAVAILABLE`. No event detector or incident inference is implemented.
+
+### Completed
+
+- Added typed bounded object boxes/scores and quality measurements in `backend/app/services/video_types.py`. The object API result includes normalized bounds, frame index, decoder timestamp with explicit known/unknown state, detector version, score semantics, and evidence ID; the job API validates nested schemas and caps output at 500 detections and 32 quality measurements.
+- Added uniform bounded source-frame selection in `backend/app/services/video_sampling.py`; quality sampling is capped at 181 frames and model sampling at 31. Timestamps come only from decoder `CAP_PROP_POS_MSEC`, must be finite/nonnegative/strictly increasing, and otherwise serialize as unavailable/unknown. FPS is never used to synthesize source timestamps.
+- Updated worker quality results with resolution, mean grayscale brightness, documented Laplacian variance, decoded/sample-failure counts, nominal FPS, and timestamp availability. Every metric carries algorithm/version/configuration/status/reason; optional brightness/sharpness thresholds default unset and cause `uncertain` only when explicitly configured and breached. Quality does not create an incident.
+- Added streamed upload failure codes for empty, oversized, unsupported codec/container, invalid signature/metadata, and corrupt/truncated no-frame videos. Existing checks enforce the hard byte cap during writes, signature/MIME/extension, stream properties, dimensions, duration, and an initial decoded frame. Partial decode failures later in the clip are recorded as quality uncertainty; full-container decode at intake is not guaranteed.
+- Added bounded old-worker-temp cleanup at worker startup; normal processing still unlinks its temp file and closes storage in `finally`. No durable cancellation endpoint/state was invented because API/database contracts do not specify one; a cancellation test exercises resource cleanup.
+- Resolved the Prompt 3/API conflict in `docs/implementation-decisions.md`: follow Prompt 3’s bounded object box requirement and update `API.md`; retain face-region counts only and preserve event/incident separation. Updated pinned artifact contract in `docs/model-artifacts.md`.
+- Updated `frontend/src/components/SourceAdminPanel.tsx` to show an accessible uncertain-quality warning and reason codes, or explain that thresholds are not configured; `frontend/src/components/SourceAdminPanel.test.tsx` covers the warning state.
+- No verified model artifacts were found in `.data/models`; missing files now produce `MODEL_UNAVAILABLE`, while changed bytes produce `MODEL_CHECKSUM_INVALID`. Two real-artifact tests are skipped honestly. There are no fake predictions, event detections, or accuracy claims.
+
+### Verification
+
+- Backend Ruff lint — **PASS**; Ruff format check — **PASS** (59 files); mypy — **PASS** (42 source files).
+- Backend pytest — **112 passed, 3 skipped**. Two skips require local checksum-verified YOLOX/YuNet artifacts; one requires a disposable migrated PostgreSQL URL. Targeted pipeline/API tests — **53 passed, 2 skipped**. The full backend suite was rerun after the final timestamp and missing-model-state adjustments.
+- Frontend ESLint — **PASS**; Prettier — **PASS**; TypeScript — **PASS**; Vitest — **16 passed** across 7 files; Vite build — **PASS**.
+- The `make check` wrapper was not run because `uv` is absent from shell PATH. Every backend and frontend command listed by that target was invoked directly with the repository’s pinned backend virtualenv/frontend install. `git diff --check` — **PASS**.
+- Live Supabase and model-weight-backed inference — **NOT RUN**. Test outputs cannot establish live storage privacy or model runtime behavior.
+
+### Remaining blockers and next
+
+- **P1 / unavailable model:** fetch/install the already pinned and hash-verified artifacts in a network-enabled environment, then run both artifact-backed CPU inference tests. Missing artifacts currently fail safely as `MODEL_UNAVAILABLE`.
+- **P1 / decoder completeness:** initial-frame validation plus bounded sample decoding does not prove every frame in every container decodes; an adversarial full codec/corruption matrix and hard process-level CPU timeout remain unverified.
+- **P0 external:** live Supabase private bucket/RLS and authorized access checks remain blocked on dedicated project credentials.
+- Event detection remains unimplemented; do not present object output as event evidence. Durable cancellation remains undefined by contract.
+
+Exact next phase: **Prompt 4**.
