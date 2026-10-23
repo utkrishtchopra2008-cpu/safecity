@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 
 import { ApiError, requestJson, type CurrentUser } from '../api/client';
@@ -23,21 +24,57 @@ type Summary = {
   reliability_metrics_available: boolean;
 };
 
+type DashboardFilters = { startAt: string; endAt: string; sourceId: string };
+
+const emptyFilters: DashboardFilters = { startAt: '', endAt: '', sourceId: '' };
+
+function dashboardSummaryPath(filters: DashboardFilters): string {
+  const params = new URLSearchParams();
+  if (filters.startAt) params.set('start_at', new Date(filters.startAt).toISOString());
+  if (filters.endAt) params.set('end_at', new Date(filters.endAt).toISOString());
+  if (filters.sourceId.trim()) params.set('source_id', filters.sourceId.trim());
+  const query = params.toString();
+  return `/dashboard/summary${query ? `?${query}` : ''}`;
+}
+
 export function DashboardPage() {
+  const [draftFilters, setDraftFilters] = useState<DashboardFilters>(emptyFilters);
+  const [filters, setFilters] = useState<DashboardFilters>(emptyFilters);
+  const [filterError, setFilterError] = useState<string | null>(null);
   const user = useQuery({
     queryKey: ['current-user'],
     queryFn: () => requestJson<CurrentUser>('/auth/me'),
     retry: false,
   });
   const summary = useQuery({
-    queryKey: ['dashboard-summary'],
-    queryFn: () => requestJson<Summary>('/dashboard/summary'),
+    queryKey: ['dashboard-summary', filters],
+    queryFn: () => requestJson<Summary>(dashboardSummaryPath(filters)),
     enabled: user.isSuccess,
   });
   if (user.isLoading) return <p role="status">Checking your session…</p>;
   if (user.error instanceof ApiError && user.error.status === 401)
     return <Navigate to="/login" replace />;
   if (user.isError) return <p role="alert">Your session could not be checked. Sign in again.</p>;
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      draftFilters.startAt &&
+      draftFilters.endAt &&
+      new Date(draftFilters.startAt) > new Date(draftFilters.endAt)
+    ) {
+      setFilterError('The start time must be before or equal to the end time.');
+      return;
+    }
+    setFilterError(null);
+    setFilters(draftFilters);
+  }
+
+  function clearFilters() {
+    setFilterError(null);
+    setDraftFilters(emptyFilters);
+    setFilters(emptyFilters);
+  }
 
   return (
     <div className="page-stack">
@@ -46,6 +83,63 @@ export function DashboardPage() {
         title="Dashboard"
         description="A summary of persisted candidate events and processing status. Candidate events are not confirmed incidents."
       />
+      <Surface>
+        <h2 id="dashboard-filters-heading">Filter candidate-event summary</h2>
+        <p>Times use your local timezone and are sent to the API as UTC instants.</p>
+        <form
+          className="dashboard-filters"
+          aria-labelledby="dashboard-filters-heading"
+          onSubmit={applyFilters}
+        >
+          <label>
+            Start time
+            <input
+              type="datetime-local"
+              value={draftFilters.startAt}
+              onChange={(event) =>
+                setDraftFilters({ ...draftFilters, startAt: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            End time
+            <input
+              type="datetime-local"
+              value={draftFilters.endAt}
+              onChange={(event) => setDraftFilters({ ...draftFilters, endAt: event.target.value })}
+            />
+          </label>
+          <label>
+            Source ID
+            <input
+              aria-label="Source ID"
+              aria-describedby="dashboard-source-help"
+              autoComplete="off"
+              spellCheck={false}
+              type="text"
+              value={draftFilters.sourceId}
+              onChange={(event) =>
+                setDraftFilters({ ...draftFilters, sourceId: event.target.value })
+              }
+            />
+            <span className="field-help" id="dashboard-source-help">
+              Optional source UUID
+            </span>
+          </label>
+          <div className="dashboard-filter-actions">
+            <button className="button button--primary" type="submit">
+              Apply filters
+            </button>
+            <button className="button button--secondary" onClick={clearFilters} type="button">
+              Clear filters
+            </button>
+          </div>
+        </form>
+        <p>
+          Time and source filters apply to candidate events. Source and job counts remain overall.
+        </p>
+        {filterError ? <p role="alert">{filterError}</p> : null}
+      </Surface>
       {summary.isLoading ? <p role="status">Loading operational summary…</p> : null}
       {summary.isError ? (
         <Surface>

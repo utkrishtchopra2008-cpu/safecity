@@ -460,14 +460,16 @@ pre {
   min-height: 96px;
 }
 
-.incident-filters {
+.incident-filters,
+.dashboard-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   align-items: end;
   gap: var(--space-4);
 }
 
-.incident-filters label {
+.incident-filters label,
+.dashboard-filters label {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -477,7 +479,8 @@ pre {
 }
 
 .incident-filters input,
-.incident-filters select {
+.incident-filters select,
+.dashboard-filters input {
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -495,6 +498,7 @@ pre {
 }
 
 .incident-filter-actions,
+.dashboard-filter-actions,
 .incident-pagination-actions {
   display: flex;
   flex-wrap: wrap;
@@ -502,6 +506,7 @@ pre {
 }
 
 .incident-filters .button,
+.dashboard-filters .button,
 .incident-pagination .button {
   min-height: 44px;
 }

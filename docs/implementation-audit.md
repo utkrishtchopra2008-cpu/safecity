@@ -1,6 +1,6 @@
 # Implementation audit and traceability
 
-Audit refreshed against the implementation tree published at `4d43bb0`, including this turn's incident-list filters and paging, on 2026-10-23. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` was excluded as instructed. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
+Audit refreshed against the implementation tree published at `4d43bb0`, including this turn's incident-list filters/paging and dashboard filters, on 2026-10-23. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` was excluded as instructed. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
 
 ## Repository and environment
 
@@ -15,7 +15,7 @@ Audit refreshed against the implementation tree published at `4d43bb0`, includin
 | Compose | PARTIAL | `compose.yaml` defines PostgreSQL, backend, and a single worker service. Worker health reporting and full container startup were not verified. |
 | Environment | PARTIAL | `.env.example` now includes backend-only Supabase Storage placeholders and upload byte/duration limits; actual credentials and deployment policy are unavailable. |
 | Runtime | PARTIAL | Backend checks ran with Python 3.12.15 and `uv.lock`. Local Node is 24.22.0 (outside the project's 22.x engine range); CI uses Node 22.16.0. |
-| Automated tests | PARTIAL | Current backend: 102 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 14 Vitest tests passed, including incident-list filter encoding/page transitions and the global shell navigation landmark/skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
+| Automated tests | PARTIAL | Current backend: 102 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 16 Vitest tests passed, including dashboard/incident filter encoding, date validation, incident page transitions, and the global shell navigation landmark/skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
 
 ## Risk-ranked gap register
 
@@ -99,7 +99,7 @@ Statuses below describe implemented proof, not a claim that the entire parent re
 | `POST /api/v1/auth/login` | PARTIAL | `backend/app/api/v1/auth.py`; `backend/tests/test_auth.py` generic failure, rate limit and cookie secrecy; successful flow tested. |
 | `POST /api/v1/auth/logout` | PARTIAL | `backend/app/api/v1/auth.py`; `backend/tests/test_auth.py` CSRF and revocation; tested. |
 | `GET /api/v1/auth/me` and `GET /api/v1/auth/csrf` | PARTIAL | `backend/app/api/v1/auth.py`; `backend/tests/test_auth.py` expiry/revocation/CSRF; tested. |
-| `GET /api/v1/dashboard/summary` | PARTIAL | `backend/app/api/v1/dashboard.py`; current test verifies auth gate only; response aggregation/range validation contract tests remain. |
+| `GET /api/v1/dashboard/summary` | PARTIAL | `backend/app/api/v1/dashboard.py`, `frontend/src/pages/DashboardPage.tsx`; `frontend/src/pages/DashboardPage.test.tsx` verifies date/source query encoding and inverted-range handling; backend response aggregation and range validation tests remain. |
 | `GET /api/v1/incidents` | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`, `frontend/src/pages/IncidentsPage.tsx`; `frontend/src/pages/IncidentsPage.test.tsx` verifies query encoding and page transitions; backend filtered-result/paging response tests remain. |
 | `GET /api/v1/incidents/{incident_id}` | PARTIAL | `backend/app/api/v1/incidents.py`; current test suite lacks full detail/provenance response contract assertions. |
 | `POST /api/v1/incidents/{incident_id}/reviews` | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; `backend/tests/test_auth.py` verifies typed success, allowed outcome/note, and server-derived reviewer identity; transactional persistence, duplicate conflict, and rollback still need PostgreSQL route tests. |
