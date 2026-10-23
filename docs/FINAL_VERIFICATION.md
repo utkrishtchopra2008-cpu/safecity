@@ -7,10 +7,10 @@ This repository contains a partial SafeCity implementation. It is not production
 | Area | Result |
 |---|---|
 | Backend Ruff lint | Passed with the locked backend environment. |
-| Backend Ruff format check | Passed; 54 files formatted. |
-| Backend mypy | Passed; no issues in 41 source files. |
-| Backend pytest | 102 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
-| Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
+| Backend Ruff format check | Passed; 56 files formatted. |
+| Backend mypy | Passed; no issues in 40 source files. |
+| Backend pytest | 100 passed, 3 skipped. Two model-artifact tests require configured verified files; the PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`. One Starlette TestClient deprecation warning remains. |
+| Locked installs | `uv sync --locked --group dev` and `npm ci` passed from the committed lockfiles with Python 3.12.14 and Node 22.16.0. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
 | Frontend lint/typecheck/unit tests/build | Passed; 16 Vitest tests, including dashboard/incident filters, date validation, incident pagination, the AppShell skip-link/navigation contract, and inert rendering of HTML-like TinyFish text. |
 | Frontend format check | Passed. |
@@ -21,7 +21,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | TinyFish | Search/Fetch request handling, URL boundaries and provider failures passed mocked tests; source-level refresh passed SQLite persistence/deduplication and disabled-provider tests. No live request or PostgreSQL queue integration was run; no key is configured. |
 | Visual and accessibility review | Partial manual review: login and protected-route error states were inspected in the browser; responsive header checked at 1024 px and 390 px, with no horizontal overflow at 390 px. Full-page screenshot and keyboard/contrast audit remains NOT RUN. |
 
-The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, inert external-content rendering, job owner isolation/diagnostic redaction and role-specific status, typed incident-review submission/history with server-derived reviewer identity, incident filter encoding/page navigation, and dashboard date/source filters. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions checks passed on the previously published commit `4d43bb0`; the current dashboard and incident-list changes still need CI.
+The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, inert external-content rendering, job owner isolation/diagnostic redaction and role-specific status, typed incident-review submission/history with server-derived reviewer identity, incident filter encoding/page navigation, and dashboard date/source filters. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions passed on a previously published commit `4d43bb0`; the workflow result for the current remote HEAD was not checked during Prompt 0.
 
 ## Operational constraints and remaining requirements
 

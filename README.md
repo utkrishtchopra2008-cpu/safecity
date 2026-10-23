@@ -2,14 +2,14 @@
 
 SafeCity AI is a reliability-aware public-space incident intelligence platform. It helps authorized operators review candidate events using supporting evidence, uncertainty information, and measurable evaluation. Predictions are not ground truth; consequential decisions remain subject to human review.
 
-This branch contains the initial project foundation. Feature workflows (authentication/session persistence, incident ingestion, video processing, evaluation, and TinyFish public-context retrieval) are not implemented by this scaffold yet.
+This repository contains working slices of the operator workflow: server-managed authentication, incident review, technical-admin source registration and prerecorded-video upload, a PostgreSQL-backed worker, bounded OpenCV quality sampling, and optional public-context retrieval. Object and face-region observations are not event detections; a verified event detector and detector-backed evaluation are not available. See `docs/implementation-audit.md` for implemented scope, evidence, and remaining gaps.
 
 ## Technology
 
 - **Frontend:** React 19, TypeScript, Vite, React Router, TanStack Query, CSS variables/CSS Modules (as needed), Lucide React, Vitest, and React Testing Library. Charting dependencies are deferred until metric charts are implemented.
 - **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Psycopg 3, HTTPX, pytest, Ruff, and mypy.
 - **Database:** PostgreSQL 16 for local development via Docker Compose.
-- **External context:** TinyFish Search/Fetch is documented but disabled by default; this scaffold does not make TinyFish requests.
+- **External context:** TinyFish Search/Fetch is implemented server-side and disabled by default. Provider behavior is mock-tested; no live TinyFish request is claimed.
 
 ## Requirements
 
@@ -44,7 +44,7 @@ make dev-frontend
 
 The frontend is served at `http://localhost:5173`. The backend liveness check is at `http://localhost:8000/health/live`, and development-only API docs are at `http://localhost:8000/docs`.
 
-The frontend Vite server proxies `/api and `2health`  to the local backend. `VITE_API_BASE_URL` is public configuration only; do not put credentials or keys in `VITE_*` values.
+The frontend Vite server proxies `/api` and `/health` to the local backend. `VITE_API_BASE_URL` is public configuration only; do not put credentials or keys in `VITE_*` values.
 
 ## Useful commands
 
@@ -61,7 +61,7 @@ make build-frontend
 make check
 ```
 
-`make check` runs the available lint, formatting, type-check, test, and frontend-build checks. PostgreSQL integration checks will be added when the database/session layer is implemented. The `/health/ready` route currently confirms that the bootstrap application and its configuration are loaded; it is **not yet a database-readiness check**.
+`make check` runs backend lint, formatting, type-checking and tests, followed by frontend lint, formatting, type-checking, tests and production build. PostgreSQL integration tests require `SAFECITY_TEST_DATABASE_URL` to point to a disposable migrated database and are skipped otherwise. `/health/ready` checks database readiness; it does not establish worker or storage readiness.
 
 ## Repository map
 
@@ -71,18 +71,22 @@ make check
 ├── backend/
 │   ├── app/
 │   │   ├── core/          # Validated configuration and shared backend concerns
-│   │   ├── db/            # Declarative base; persistence is added in a later phase
-│   │   ├── api/v1/        # Versioned API routing boundary
-│   │   └── main.py
-│   ├── migrations/        # Alembic environment; feature migrations follow with schema work
+│   │   ├── db/            # SQLAlchemy models and session management
+│   │   ├── api/v1/        # Versioned auth, incident, source, evidence, job, evaluation, and context routes
+│   │   ├── services/      # Incident, worker, evaluation, OpenCV, and TinyFish services
+│   │   ├── storage/       # Private Supabase Storage adapter
+│   │   ├── cli/           # Demo seed, model setup, and storage maintenance commands
+│   │   ├── main.py
+│   │   └── worker.py      # PostgreSQL-backed processing worker
+│   ├── migrations/        # Alembic environment and schema revision
 │   ├── tests/
 │   └── pyproject.toml
 ├── frontend/
 │   ├── src/
 │   │   ├── api/           # Typed API client
-│   │   │   └── app/           # Router and application shell
-│   │   ├── components/    # Shared foundation components
-│   │   ├── pages/         # Foundation and not-found pages only
+│   │   ├── app/           # Router and application shell
+│   │   ├── components/    # Shared components and source-admin panel
+│   │   ├── pages/         # Login, dashboard, incident, reliability, evaluation, status, and context screens
 │   │   └── styles/        # Design tokens and global styles
 │   └── package.json
 ├── .env.example
@@ -99,10 +103,10 @@ make check
 
 ## Safety and scope
 
-- The setup UI is a foundation placeholder; it does not claim to connect to live CCTV.
+- Source registration supports simulated sources and prerecorded uploads; this does not claim to connect to live CCTV.
 - No facial recognition, identity tracking, individual criminality scoring, automated accusations, or autonomous dispatch are implemented.
-- TinyFish is feature-flagged in configuration and disabled by default. The key remains server-side, and no video/media or personal data may be sent to the provider.
-- Actual database readiness, authentication, media processing, background jobs, incident APIs, and TinyFish calls will be introduced in the planned phases after this foundation is accepted.
+- TinyFish is disabled by default. Its key remains server-side, and video/media, credentials, private URLs, and personal incident data must never be sent to the provider.
+- The current implementation has a PostgreSQL schema and worker, server-managed sessions and CSRF checks, incident/review and evidence routes, upload validation and private-storage integration, and optional context workflows. Live Supabase and TinyFish services are not verified. No event detection is inferred from object observations or processing failures.
 
 ## Contribution discipline
 
@@ -110,14 +114,6 @@ Read `AGENTS.md` and all source-of-truth specifications before implementing feat
 
 
 
-#OUR DEMO VIDEO:
+## Demo Video
 
-
-
-https://github.com/user-attachments/assets/50d2e493-116f-48e6-b9dd-50ce6fd34e45
-
-
-
-
-
-
+[Watch the SafeCity AI demo](https://github.com/user-attachments/assets/50d2e493-116f-48e6-b9dd-50ce6fd34e45)

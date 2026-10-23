@@ -31,6 +31,7 @@
 - A pinned OpenCV Zoo YOLOX-S INT8BQ object model (Apache-2.0, SHA-256 verified) and YuNet face-region model (MIT, SHA-256 verified) are now implemented as optional CPU-only observation detectors. See `docs/model-artifacts.md`. Model files remain outside Git and fail closed on checksum mismatch. Their COCO/WIDER-Face behavior does not provide event classification, face recognition, or production performance claims.
 - No approved incident/event detector or licensed evaluation dataset was found. Real event inference, incident generation from uploads, and detector-backed evaluation remain blocked; no fabricated event output will be added.
 - No TinyFish secret is configured. Provider behavior can only be implemented and verified with mocks until an operator configures a backend secret.
+- The README demo video is a user-provided presentation link; its footage provenance and usage permission are not established by repository documentation. Treat it as presentation material only, not as authorized test, training, or evaluation data. The documented local walkthrough fixture is synthetic and clearly labelled (`docs/demo-data.md`). No real footage or external data was used in Prompt 0.
 
 ## Audit finding on authority mismatch
 

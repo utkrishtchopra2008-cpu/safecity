@@ -6,7 +6,7 @@
 
 ## Planning Basis
 
-This plan follows `PRD.md`, `DESIGN.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, and `AGENTS.md`. The repository currently contains these specifications and no application scaffold, so Phase 1 establishes the project structure before feature work begins.
+This plan follows `PRD.md`, `DESIGN.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, and `AGENTS.md`. It was drafted before the current implementation existed. The repository now contains the scaffold and selected feature workflows; use `docs/implementation-audit.md` for current implementation evidence and gaps. Treat phase descriptions as planned work and reconcile them with the code before assuming any phase remains unimplemented.
 
 ### Fixed implementation boundaries
 
@@ -31,7 +31,7 @@ Establish a verified baseline and turn the specifications into a task checklist 
 
 ### Features and tasks
 1. Inspect the repository tree, Git state, commit history, and any existing hidden configuration or tests.
-2. Reconfirm that the actual codebase is documentation-only; do not assume planned folders or files already exist.
+2. Reconcile the plan against the actual tree and Git history; preserve valid existing work and do not assume planned folders or files are absent.
 3. Map each P0 PRD requirement to the planned phase and acceptance test.
 4. Create a list of decisions that block implementation versus those that can use documented defaults.
 5. Confirm permitted demo video/data, retention expectations, public-context source policy, and local run requirements before enabling real data or external calls.
