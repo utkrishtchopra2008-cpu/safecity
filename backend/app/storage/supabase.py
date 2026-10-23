@@ -48,9 +48,13 @@ class SupabaseStorage:
             await self._client.aclose()
 
     def _object_url(self, key: str) -> str:
+        self._validate_key(key)
+        return f"{self._base_url}/object/{quote(self._bucket, safe='')}/{quote(key, safe='/')}"
+
+    @staticmethod
+    def _validate_key(key: str) -> None:
         if not key or key.startswith("/") or ".." in key.split("/") or "\\" in key:
             raise ValueError("Storage key must be a server-generated relative object key")
-        return f"{self._base_url}/object/{quote(self._bucket, safe='')}/{quote(key, safe='/')}"
 
     async def upload(
         self,
@@ -180,6 +184,7 @@ class SupabaseStorage:
         """Create a short-lived signed URL after the caller has authorized the evidence."""
         if not 1 <= expires_in_seconds <= 300:
             raise ValueError("Signed URL lifetime must be between 1 and 300 seconds")
+        self._validate_key(key)
         try:
             response = await self._client.post(
                 f"{self._base_url}/object/sign/{quote(self._bucket, safe='')}/{quote(key, safe='/')}",

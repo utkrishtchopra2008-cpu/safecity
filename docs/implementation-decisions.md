@@ -19,12 +19,13 @@
 - Use the existing framework, package managers and pinned frontend dependencies. Do not upgrade major versions or add an unsupported provider/model.
 - Treat unavailable/null metric values as unavailable, never as zero; persist provenance needed to reproduce actual calculations.
 - Keep job cancellation unavailable until its contract is defined. Prompt 2 asks for cancellation, but `API.md` §4.7 defines only job-status reads and `DATABASE.md` §4.5 restricts job states to `pending`, `running`, `completed`, and `failed`; neither defines cancellation authorization, transition semantics, or behavior for work already executing. Do not overload `failed` or add an endpoint/state silently. A contract amendment should specify cancellation before implementation.
+- Prompt 1's Actions review confirms historical run #16 failed on missing import `app.media.uploads` during mypy and run #17 passed after commit `a7c8be4` added that module. Current remote `main` is `420197b`; it has empty combined status; PR-only workflow-run lookup cannot answer push events, while the Actions feed shows no current-HEAD run. Do not call CI green for that commit based on older run #40.
 - Apply the API.md single-instance starting limits to source registration/upload/processing and evaluation creation using bounded in-process sliding windows. They are intentionally not represented as distributed enforcement; multi-instance deployment needs a trusted proxy/shared limiter.
 - The implemented evaluation metric helper uses exact category plus positive interval overlap, maximum-cardinality one-to-one matching, and stable tie-breaking. It is bounded to 1,000 combined events. This is recorded as a versioned implementation rule; the calculation helper is not yet connected to a worker or persisted evaluation run.
 
 ## Unresolved/blocked items
 
-- The submitted prompt pack contains Prompts 0, 1, 2, 5, 6, 7 and 8; Prompts 3 and 4 are absent. Work follows repository authorities and the explicit Prompt 0 safety contract without inferring missing prompt text.
+- Prompt 2 was supplied and completed for persistence/storage. Prompts 3 and 4 have not yet been supplied in this conversation. Job cancellation is not a Prompt 2 requirement; it remains unimplemented because `API.md` and `DATABASE.md` do not define its authorization or state-transition contract. Do not infer cancellation semantics from another task.
 - Backend checks run with the committed `backend/uv.lock`; the optional PostgreSQL test skips when no disposable database URL is configured.
 - A disposable PostgreSQL migration/integrity run was completed earlier in this work session. No Supabase project credentials are configured, so live RLS and private Storage checks remain unavailable.
 - The API endpoint catalogue is inventoried in `docs/implementation-audit.md`; several responses/role paths still lack positive contract tests. Resource authorization follows the single-institution contract and has no source-membership/tenant schema. RLS policies in `docs/supabase-storage.md` still need application in a configured project.
@@ -32,7 +33,14 @@
 - No approved incident/event detector or licensed evaluation dataset was found. Real event inference, incident generation from uploads, and detector-backed evaluation remain blocked; no fabricated event output will be added.
 - No TinyFish secret is configured. Provider behavior can only be implemented and verified with mocks until an operator configures a backend secret.
 - The README demo video is a user-provided presentation link; its footage provenance and usage permission are not established by repository documentation. Treat it as presentation material only, not as authorized test, training, or evaluation data. The documented local walkthrough fixture is synthetic and clearly labelled (`docs/demo-data.md`). No real footage or external data was used in Prompt 0.
+- Prompt 1's repository inventory marks all 128 tracked files KEEP; only ignored caches, virtual environment, `node_modules`, and frontend build output are proven generated local artifacts. No deletion occurred. Current remote Actions status is not verified for SHA `420197b2cb491108d63053a858ab621beae44371`.
 
 ## Audit finding on authority mismatch
 
 The root specifications define a complete product, while this checkout now contains only selected foundation and workflow slices. `docs/implementation-audit.md` records implemented scope and remaining proof. The setup screen and API remain explicit about unavailable capabilities; the app is not a complete or production-ready product.
+# Prompt 2 implementation decisions (2026-10-23)
+
+- **Keep the existing schema revision:** reviewed SQLAlchemy models and `0001_initial_schema.py` against `DATABASE.md`; no concrete schema mismatch justified adding a migration. All 16 model tables match the migration. Clean PostgreSQL 16 upgrade, integrity tests, downgrade to base, and re-upgrade passed against a disposable database with no persistent volume.
+- **Fail closed on signed object keys:** use the same relative-key/traversal validation for signed URL requests as uploads, reads, existence checks, and deletion. This is a defensive storage-boundary fix and does not alter the API or key format.
+- **Live Supabase remains unverified:** the code and docs require a private bucket and deny direct anon/authenticated access; service-role requests bypass RLS, so backend role/resource authorization remains required. Do not report RLS, live signed access, or orphan cleanup as verified without a configured non-production project.
+- **No hosted-service credentials:** no Supabase URL or service-role key is configured. Local PostgreSQL verification and HTTP mocks passed, but they do not establish live Supabase RLS, private bucket configuration, signed access, or cleanup behavior. Do not invent credentials or present those external checks as passed.

@@ -56,6 +56,24 @@ def test_storage_rejects_traversal_keys_before_network_call() -> None:
     asyncio.run(run())
 
 
+def test_signed_url_rejects_traversal_keys_before_network_call() -> None:
+    async def run() -> None:
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _: pytest.fail("network called"))
+        )
+        storage = SupabaseStorage(
+            AppSettings(
+                supabase_url="https://storage.example.test",
+                supabase_service_role_key="test-secret",
+            ),
+            client,
+        )
+        with pytest.raises(ValueError):
+            await storage.signed_url("evidence/../private.mp4")
+
+    asyncio.run(run())
+
+
 def test_signed_url_lifetime_is_bounded() -> None:
     async def run() -> None:
         client = httpx.AsyncClient(

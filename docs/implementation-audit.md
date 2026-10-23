@@ -1,23 +1,27 @@
 # Implementation audit and traceability
 
-Audit reviewed against the implementation tree at `f799344` on 2026-10-23. The initial checkout was clean on `main` tracking `origin/main`; this Prompt 0 worktree now has documentation-only changes. Recent commits include incident-list filters/paging, dashboard filters, and the README demo-video URL. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` is documentation about implementation, not requirements. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
+Audit reviewed against local tree `76b898dacca311c64776084b69067f79190da623` and remote `main` HEAD `420197b2cb491108d63053a858ab621beae44371` on 2026-10-23. The local branch is `main`, one local commit ahead of its cached `origin/main` (`f799344`); the GitHub remote has advanced to `420197b`, a GitHub API-created documentation commit with the same inspected tree state. The local remote-tracking ref cannot be refreshed by the shell in this environment, so do not treat it as current remote state. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` is evidence about current implementation, not authority for requirements. The repository implements selected workflows but remains partial against contracts. Finding statuses use `CONFIRMED`, `NOT PRESENT`, `PARTIAL`, and `UNVERIFIED`; requirement proofs use `PASS`, `PARTIAL`, `BLOCKED`, `NOT RUN`, or `FAIL`. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
 
 ## Repository and environment
 
 | Finding | Status | Evidence |
 |---|---|---|
-| Checkout and working tree | PASS | Initial checkout clean on `main`, commit `f799344`, tracking `origin/main`; Prompt 0 changes are documentation-only. |
+| Checkout and working tree | CONFIRMED | Prompt 0 began clean on `main` at `f799344`; its documentation change is local commit `76b898d`. Before Prompt 1, there were no working-tree edits. |
+| Prompt 1 local/remote Git state | CONFIRMED | Local `main` at `76b898dacca311c64776084b69067f79190da623`, clean before Prompt 1 docs, `main...origin/main [ahead 1]`; GitHub `main` at `420197b2cb491108d63053a858ab621beae44371`. See local status and GitHub commit URL below. Shell remote transport is unavailable; the GitHub connector verified remote state. |
+| Remote and recent history | CONFIRMED | `origin` fetch/push URL is `https://github.com/utkrishtchopra2008-cpu/safecity.git`. Remote `main` recent commits: `420197b` documentation state; `f799344` README; `1aa3587` dashboard filters; `a2c5e37` incident filters/pagination; `4d43bb0` review response tests; `60ad489` demo video; `485c84c` technical-admin job diagnostics; `650aa4f` supervisor status. The local `git log` has same history through `f799344` and Prompt 0 local commit `76b898d`. |
 | Specifications | PASS | All six authority documents and `AGENTS.md` present at repository root. |
 | Frontend foundation | PARTIAL | `frontend/src/app/router.tsx` and pages for login, dashboard, incidents, reliability, evaluations, system status, and setup implement selected workflows. Technical-admin source registration/upload controls are in `frontend/src/components/SourceAdminPanel.tsx`; `frontend/src/components/SourceAdminPanel.test.tsx` covers DEMO registration, upload/results, and storage failure. Full interaction/accessibility coverage is absent. |
 | Backend foundation | PARTIAL | `backend/app/main.py`, `backend/app/core/config.py`; liveness and DB-probing readiness exist. Worker health is honestly `not_running`; storage readiness is configuration-only. |
 | Persistence | PARTIAL | `backend/app/db/models.py` defines the required entities and `backend/migrations/versions/0001_initial_schema.py` adds the schema. A disposable PostgreSQL migration/constraint/rollback integration run passed earlier in this work session; the optional test skips when `SAFECITY_TEST_DATABASE_URL` is unset. |
-| CI and dependency lockfiles | PARTIAL | `.github/workflows/ci.yml`, `frontend/package-lock.json`, and `backend/uv.lock` are present. CI runs frontend lint/format/typecheck/tests/build and backend Ruff/format/mypy/pytest. The frontend CI install uses `npm ci`; backend install uses `uv sync --locked`. Full clean-checkout deployment remains unverified. |
+| CI and dependency lockfiles | PARTIAL | `.github/workflows/ci.yml`, `frontend/package-lock.json`, and `backend/uv.lock` are present. CI runs frontend lint/format/typecheck/tests/build and backend Ruff/format/mypy/pytest. The frontend CI install uses `npm ci`; backend install uses `uv sync --locked`. The exact-SHA combined status query for remote HEAD `420197b` returned no status entries. The connector's workflow-run lookup is limited to PR-triggered runs; the public Actions feed's latest listed run is #40 on `485c84c`, not current HEAD. No current-HEAD run is visible in the inspected feed, so its Actions result is NOT VERIFIED. |
 | Compose | PARTIAL | `compose.yaml` defines PostgreSQL, backend, and a single worker service. Worker health reporting and full container startup were not verified. |
 | Environment | PARTIAL | `.env.example` now includes backend-only Supabase Storage placeholders and upload byte/duration limits; actual credentials and deployment policy are unavailable. |
-| Runtime | PASS | `make check` ran with Python 3.12.14, Node 22.16.0, the committed `backend/uv.lock`, and `frontend/package-lock.json`. Host defaults differ, so the matching runtimes were selected for verification. |
+| Runtime | PARTIAL | Current shell reports Node `v24.22.0`, Python `3.14.7`, Docker `29.8.2`, Compose `v5.6.0`; `uv` is not on the current shell PATH. Backend requires Python `>=3.12,<3.13`, frontend requires Node `>=22.12,<23`. Prompt 0 `make check` previously ran in the selected compatible environment (Python 3.12.14, Node 22.16.0); this environment's Compose services were not started during Prompt 1. |
 | Automated tests | PARTIAL | Prompt 0 `make check`: backend 100 passed, 3 skipped; frontend 16 passed. Two model tests skipped because verified local artifacts are not configured; the PostgreSQL test skipped because `SAFECITY_TEST_DATABASE_URL` is unset. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
 
 ## Risk-ranked gap register
+
+Priority definition: P0 = safety, privacy, authorization, or correctness risk that can expose evidence or mislead an operator; P1 = mandatory MVP workflow/contract gap; P2 = operational hardening or optional improvement after P0/P1. The repository has no optional product scope that should displace unresolved mandatory MVP requirements.
 
 | Priority | Finding | Status | Required proof |
 |---|---|---|---|
@@ -31,8 +35,8 @@ Audit reviewed against the implementation tree at `f799344` on 2026-10-23. The i
 | P1 | Supabase storage policy/RLS and backend authorization boundary | PARTIAL | `docs/supabase-storage.md` specifies a private bucket and deny-by-default direct-user policies; the adapter uses a server-side service-role credential and evidence/source routes perform backend role checks. Source/tenant membership authorization is limited by the schema, and live policies were not applied. |
 | P1 | TinyFish safe boundary, provenance, freshness, timeout/degradation | PARTIAL | `backend/app/services/tinyfish.py` implements bounded Search and selected-result Fetch; source-level context routes enqueue a deduplicated PostgreSQL job handled by `backend/app/services/context_jobs.py`. Allowlisted domains, bounded streamed responses, query privacy checks, final-URL validation, attribution/freshness, capped work and cooldowns are implemented. Mocks cover provider boundaries; live provider verification and fully role/source-scoped tenancy remain unverified. |
 | P2 | Structured sanitized logs, correlation, readiness by dependency, audit trail | PARTIAL | `backend/app/main.py` adds request IDs, redacted error handling and a database readiness probe; `backend/app/services/audit.py` writes append-only events for auth/reviews/source creation. Storage/worker probes and broader security-action coverage remain absent. |
-| P2 | CI reproducibility, release/rollback, backups/retention configuration | PARTIAL | GitHub Actions uses committed frontend/Python lockfiles and latest checks passed. Backup/restore and release rollback drills are absent; retention remains approval-dependent. |
-| P1 | Incident/event detector, supported event taxonomy, and evaluation dataset | PARTIAL | YOLOX-S INT8BQ and YuNet artifacts now have pinned source revisions, license records, input/output contracts, checksums, bounded CPU sampling, and mock/real blank-frame tests (`docs/model-artifacts.md`, `backend/app/services/opencv_models.py`). They provide object and face-region observations only. No compatible event classifier, event-labeled dataset, or measured event metric is configured; event evaluation remains unavailable. |
+| P2 | CI reproducibility, release/rollback, backups/retention configuration | PARTIAL | GitHub Actions uses committed frontend/Python lockfiles. Run #40 passed on older `485c84c`; current remote HEAD has no visible run/status. Backup/restore and release rollback drills are absent; retention remains approval-dependent. |
+| P1 | Approved incident/event detector, supported event taxonomy, and labeled evaluation dataset | NOT PRESENT | YOLOX-S INT8BQ and YuNet provide object and face-region observations only (`docs/model-artifacts.md`, `backend/app/services/opencv_models.py`); neither is an event detector. No compatible approved event classifier or labeled dataset is present, so event prediction and detector-backed evaluation remain unavailable. |
 
 Cross-cutting checks: implementation remains materially narrower than the product contracts. `AGENTS.md` defines scope but there is no `CODEOWNERS`; auth, incident/review, source registration/upload, job status, evidence, dashboard/system summary, reliability/evaluation reads, and public-context Search/Fetch/source refresh routes exist. Admins can register clearly labelled simulated sources and submit prerecorded uploads through the system screen; `backend/app/cli/seed_demo.py` also provides one explicit deterministic synthetic fixture for local walkthroughs. Upload staging is byte-bounded and OpenCV checks metadata/first-frame decoding; the worker samples bounded quality and optional pinned YOLOX/YuNet observations, but full corruption/codec precision and production resource-time characterization are not established. Model taxonomy/version/license/checksum provenance is recorded; no supported event detector is configured and object observations do not create incidents. Migrations and a disposable PostgreSQL integrity run exist; live Supabase RLS was not applied. Sessions, expiry/revocation checks, CSRF, login/source/upload/processing/evaluation rate limits, redacted API errors, correlation IDs, DB audit and one PostgreSQL worker exist; limits are process-local, while source/tenant-level evidence authorization, cancellation, full operational logging, and worker liveness reporting remain incomplete. `backend/app/cli/cleanup_orphan_storage.py` provides a bounded explicit dry-run/apply cleanup for old unreferenced generated uploads; it has not run against live Supabase. `docs/threat-model.md` maps tested controls and known deployment limits. TinyFish is optional and mocked, with a per-process search cooldown and database-backed source refresh; cross-process public-search rate coordination and live provider verification remain absent. Retention remains non-destructive/configurable. Detector-backed evaluation, comprehensive source-management controls, visual/a11y review, backup/restore and release rollback drills remain absent or unverified. CI is present and lockfile-based; local backend/frontend verification passed. No event detection or event-reliability claim is generated.
 
@@ -45,7 +49,7 @@ Cross-cutting checks: implementation remains materially narrower than the produc
 | Schema entities, constraints, indexes, deletion rules and ownership | `DATABASE.md` §§4–10,13–14 | `backend/app/db/models.py`; initial revision `backend/migrations/versions/0001_initial_schema.py` | Disposable PostgreSQL fresh/roundtrip migration, constraint, duplicate-ingestion and rollback checks ran earlier in this session; live Supabase policies remain NOT RUN. |
 | Pages, component system, states, responsiveness, accessibility | `DESIGN.md` §§6–18; `PRD.md` §§8,13 | Login, dashboard, incident list/detail with evidence playback, reliability, evaluations, system/source status, setup, and technical-admin source registration/upload pages. `frontend/src/components/SourceAdminPanel.test.tsx` covers registration, upload/result, and storage-error states. | Comprehensive page-state, keyboard, viewport and contrast review. |
 | Modular architecture, worker, storage, security, observability, deployment acceptance | `ARCHITECTURE.md` §§4–23 | SQLAlchemy data layer, private Supabase Storage adapter, DB worker, auth/security middleware, audit events and readiness probe; worker liveness is not reported | Broader operational/security tests, live storage policy validation, monitoring, migration/release checks. |
-| Audit/implementation plan | `IMPLEMENTATION_PLAN.md` | Scaffold phase only | Continue in dependency order; the prompt pack omits Prompt 3 text and jumps from Prompt 2 to Prompt 4. Use architecture video-processing contract, avoid inventing new requirements. |
+| Audit/implementation plan | `IMPLEMENTATION_PLAN.md` | The plan was drafted before current implementation; its planning intent is preserved and its stale “documentation-only” premise was corrected in Prompt 0. It remains a planned phase checklist, not proof of present status. | Use the current evidence and status in this audit. Prompt 2 has now been audited and implemented to its available local verification boundary; follow the next supplied prompt and do not infer missing prompt scope. |
 
 ## Execution sequence and gates
 
@@ -126,7 +130,7 @@ Statuses below describe implemented proof, not a claim that the entire parent re
 | Architecture modular monolith, repository/data boundary, PostgreSQL, private storage, DB worker, server sessions/CSRF, secret boundary | PARTIAL | `backend/app/db`, `backend/app/storage`, `backend/app/worker.py`, `backend/app/api/v1`, `frontend/src/api`; relevant backend test suite passed; live deployment/provider and independent worker monitoring remain unverified. |
 | Architecture no false incident on failure, idempotent retries, bounded resources, undefined metrics unavailable, no unnecessary services | PARTIAL | `backend/app/worker.py`, `backend/app/services/opencv_models.py`, `backend/app/services/evaluation_metrics.py`, `backend/app/services/storage_cleanup.py`, `compose.yaml`; `backend/tests/test_worker.py`, `test_opencv_models.py`, `test_evaluation_metrics.py`, `test_storage_cleanup.py`; production performance and recovery drills remain incomplete. |
 | Threat model and negative security regression | PARTIAL | `docs/threat-model.md`; tests cover session expiry/revocation, CSRF, role rejection, upload/path checks, configured per-instance rate limits, TinyFish public URL/privacy/response bounds, private storage signing and audit immutability. Automated secret scanning, comprehensive resource ownership, distributed throttling, and live Storage policy tests remain absent/unverified. |
-| Architecture release, monitoring, backup/restore, rollback and demo provenance | PARTIAL | `.github/workflows/ci.yml`, `backend/uv.lock`, `frontend/package-lock.json`, `backend/app/cli/seed_demo.py`, `docs/demo-data.md`; CI passed on `a42acc0`; deployment and restore drills remain absent. |
+| Architecture release, monitoring, backup/restore, rollback and demo provenance | PARTIAL | `.github/workflows/ci.yml`, `backend/uv.lock`, `frontend/package-lock.json`, `backend/app/cli/seed_demo.py`, `docs/demo-data.md`; Actions run #40 passed on older `485c84c`, current remote HEAD `420197b` has no visible check/run; deployment and restore drills remain absent. |
 
 ### Traceability follow-up
 
@@ -179,8 +183,227 @@ Highest-value next local work is end-to-end route/state coverage that never impe
 | Failure never silently becomes confirmed incident; retries do not duplicate | PARTIAL | Worker marks failure; unique incident key and PostgreSQL test; no genuine event detector and no full worker restart/storage recovery matrix. |
 | Evaluation traceable to versioned inputs/rules; undefined metrics unavailable | PARTIAL | Evaluation models and matching rule in `evaluation_metrics.py`; pure metric fixtures pass, run persistence remains detector-blocked. |
 | Sessions/CSRF and backend-only secrets | PARTIAL | `auth.py`, config, `.env.example`; auth tests pass; live deployment config remains unverified. |
-| Migrations and automated tests in workflow | PARTIAL | Alembic, CI workflow and locked dependencies are present; local `make check` passed. GitHub Actions status for current HEAD was not checked in Prompt 0; the PostgreSQL integration test skips without its disposable database URL. |
+| Migrations and automated tests in workflow | PARTIAL | Alembic, CI workflow and locked dependencies are present; local `make check` passed. No Actions run is visible for remote HEAD `420197b` in the inspected feed, and the exact-SHA combined status is empty; the PostgreSQL integration test skips without its disposable database URL. |
 | Application and worker independently monitored | PARTIAL | `backend/app/main.py` separates readiness; worker is honestly `not_reported`; true worker liveness not yet measured. |
 | No unnecessary infrastructure | PASS | `compose.yaml` has PostgreSQL, API and one worker; no Redis/Celery/Kafka or microservices. |
 | Simulated data never represented as live/model output | PARTIAL | Explicit source labels and `seed_demo.py`; frontend/admin UI tests pass, full browser demonstration not run. |
 | Model, evidence and deployment decisions documented | PARTIAL | `docs/model-artifacts.md`, `docs/implementation-decisions.md`, `docs/supabase-storage.md`; event detector and live deployment are unavailable. |
+
+## Prompt 1 — GitHub Actions and CI diagnosis
+
+Current branch is `main`. GitHub's latest commit search returned remote HEAD `420197b2cb491108d63053a858ab621beae44371` ([commit](https://github.com/utkrishtchopra2008-cpu/safecity/commit/420197b2cb491108d63053a858ab621beae44371)). Exact-SHA combined status returned an empty status list. The integration's workflow-run lookup filters to PR-triggered runs; the public [Actions page](https://github.com/utkrishtchopra2008-cpu/safecity/actions) listed run #40 at `485c84c7b437adf23ff736bb870c5de99859f823` as its latest run, successful; it predates current remote HEAD and does not prove its checks. No current-HEAD run was visible in that feed. **Current HEAD Actions result: NOT VERIFIED.**
+
+Historical failure investigation: [run #16](https://github.com/utkrishtchopra2008-cpu/safecity/actions/runs/39839223489) on `ae285428e1b4c23e46fd3e1d57619093618bd89a` had frontend checks pass; backend lint and format pass; backend mypy failed because `app/api/v1/sources.py` imported missing `app.media.uploads` (`import-not-found`); backend tests were consequently skipped. The next [run #17](https://github.com/utkrishtchopra2008-cpu/safecity/actions/runs/39839691034) on `a7c8be49c10f53c7b140fed1128694f3d001f1c2` passed both backend and frontend jobs. Its commit adds `backend/app/media/uploads.py` (118 lines) and the job log records typecheck and test success (70 passed, 3 skipped). This later commit is the evidenced fix for #16. Runs #18–#40 are shown as successful on the public page; the page did not expose their logs in this audit. Run #40's successful conclusion is confirmed on that page only, not inferred from older success.
+
+The connected GitHub integration did not expose a list-all-push-workflow-runs API. Current status therefore combines latest-commit search, exact-SHA status lookup, exact-SHA PR-run lookup, and the public Actions feed. No current run URL was present in inspected results; latest visible run URL is https://github.com/utkrishtchopra2008-cpu/safecity/actions/runs/39868184903 (run #40).
+
+## Feature-path findings and status semantics
+
+| Area | Finding status | Current evidence and limitation |
+|---|---|---|
+| Session, roles, CSRF, CORS | PARTIAL | `backend/app/api/v1/auth.py`, `backend/app/main.py`, `backend/app/core/config.py`; `backend/tests/test_auth.py`, `test_config.py`. Server cookie sessions, revocation/expiry, CSRF and configured origin checks are present. Roles are institution-wide; per-source/tenant membership boundaries are not modeled. Rate limiting is per process. |
+| Typed API, route inventory, stable error contract | PARTIAL | Routes are registered in `backend/app/api/v1/router.py`; Pydantic models in `schemas.py`; common error behavior in `backend/app/core/errors.py`; route modules listed below. Auth and selected status/review tests exist; many endpoint success, validation, authorization and error-envelope combinations remain unproved. |
+| Streaming uploads and media checks | PARTIAL | `backend/app/media/uploads.py` streams bounded chunks to a private temporary file, hashes, checks extension/MIME/signature, OpenCV metadata, duration, dimensions and first-frame decode; `backend/tests/test_video_uploads.py`. Request-level ingress/proxy body caps, adversarial codec matrix and wall-clock/resource tests are not verified. |
+| OpenCV timeline, sample mapping, quality and model provenance | PARTIAL | `backend/app/worker.py`, `backend/app/services/opencv_models.py`, `docs/model-artifacts.md`; `backend/tests/test_opencv_models.py`, `test_worker.py`. Sampled quality and optional object/face-region observations exist, not event detection. Two artifact-backed checks skipped because local checksum-verified artifacts are unavailable; no bounded runtime benchmark is claimed. |
+| Job lifecycle: atomicity, idempotency, retry, cancellation, orphan handling | PARTIAL | `backend/app/worker.py`, `backend/app/services/storage_cleanup.py`, `backend/app/cli/cleanup_orphan_storage.py`; worker/cleanup tests and earlier disposable PostgreSQL run. Bounded attempts/lease recovery and orphan reference rechecks are covered. Cancellation has no route/state contract; live storage cleanup, process-crash recovery and all external side-effect windows are unverified. |
+| DB transactions, invariants, migration rollback | PASS for tested invariants; PARTIAL overall | `backend/app/db/models.py`, `backend/migrations/versions/0001_initial_schema.py`, `backend/tests/test_postgres_integrity.py`. The full Prompt 2 suite without a database URL skipped the opt-in test; that test was then run directly and passed against a fresh disposable PostgreSQL database, and passed again after downgrade/re-upgrade. Offline SQL generation and model/migration table-set comparison passed. Hosted Supabase migration/policy and exhaustive invariant coverage remain NOT RUN. |
+| Private storage and resource ownership | PARTIAL | `backend/app/storage/supabase.py`, `backend/app/api/v1/evidence.py`, `docs/supabase-storage.md`; `backend/tests/test_supabase_storage.py`, `test_auth.py`. Adapter and signed URL bounds are mock-tested; real bucket privacy/RLS and source membership checks are unverified. |
+| Secrets, deployment, observability, retention | PARTIAL | `.env.example`, `backend/app/core/config.py`, `backend/app/main.py`, `backend/app/services/audit.py`, `docs/threat-model.md`. Production validation and request IDs/redacted failures exist; no live deployment, worker heartbeat monitor, backup/restore drill, confirmed retention period, or destructive retention operation is evidenced. |
+| Evaluation definitions and claims | PARTIAL | `backend/app/services/evaluation_metrics.py`, `backend/tests/test_evaluation_metrics.py`, evaluation API/UI. Hand-calculated helper definitions have tests; no approved detector+dataset, persisted validated run, or real reliability metric is available. UI/API must preserve unavailable states. |
+| TinyFish boundary, timeouts, failure, freshness and provenance | PARTIAL | `backend/app/services/tinyfish.py`, `context_jobs.py`; `backend/tests/test_tinyfish.py`, `test_context_jobs.py`. Mock tests cover public URL/data boundaries, response caps, attribution, unknown/stale publication times and graceful failure. Live credentials/provider, cross-process search cooldown and live freshness behavior are unverified. Core workflow independence is mock-covered. |
+| Required pages and states | PARTIAL | Router maps login, dashboard, incidents/detail, reliability, evaluations, system/source status, setup, public search/source context. Tests exist for API client, dashboard, incident filter, source admin, shell, setup and public context. There are no complete page-state matrices; some typed pages lack focused component tests. |
+| Responsive and accessibility behavior | PARTIAL | Shared CSS tokens/global styles and shell skip-link/nav test; prior visual spot-check at 1024 and 390 px is recorded. Full keyboard-only journey, WCAG contrast, screen reader announcements, reduced-motion browser check and all-page narrow viewport review are NOT RUN. |
+| CI reproducibility | PARTIAL | `.github/workflows/ci.yml`, `Makefile`, `backend/pyproject.toml`, lockfiles. Exact commands are documented below. Prompt 0 local `make check` passed with explicit test skips; current remote Actions is not verified. Docker startup/deployment is not part of CI. |
+
+## Requirement-to-file/test traceability matrix
+
+The detailed matrices above and below are grouped only where one source requirement family has shared proof. Each row names implementation evidence and a proving test; absent direct proof is called out. Status reflects available evidence, not assumed completeness.
+
+| Requirement family | Status | Implementation evidence | Proving test / outstanding proof |
+|---|---|---|---|
+| PRD product intent/goals/non-goals and journeys A–F (`PRD.md` §§1–5) | PARTIAL | Auth, incident review, reliability/evaluation display, source intake, public context; safety limits in `AGENTS.md` and `docs/implementation-decisions.md` | Journey coverage across frontend/API is incomplete; existing route, worker, and UI tests named in PRD rows above. No object observation may be represented as an event. |
+| PRD FR-001–044 and AT-01–15 (`PRD.md` §§6,16) | PARTIAL | FR groups and AT groups in preceding detailed trace | Current default suite proves selected isolated behaviors; missing detector/data, route combinations, live storage, and E2E remain blocked or not run. |
+| API authentication, users, dashboard, incident list/detail/review, evidence | PARTIAL | `backend/app/api/v1/{auth,dashboard,incidents,evidence}.py`, `schemas.py`; frontend typed client and corresponding pages | `backend/tests/test_auth.py`, `frontend/src/api/client.test.ts`, dashboard/incident component tests. List/detail response, ownership, signed-content success and error-envelope coverage is incomplete. |
+| API sources, upload, process, context, job/status, reliability, evaluation, public search/fetch | PARTIAL | `backend/app/api/v1/{sources,jobs,reliability,evaluations,public_context}.py`; `backend/app/api/v1/router.py` | `test_video_uploads.py`, `test_worker.py`, `test_context_jobs.py`, `test_evaluation_metrics.py`, `test_tinyfish.py`, selected `test_auth.py`. Direct success/error/schema test for every endpoint is incomplete. |
+| API schemas, pagination/filtering, common error code/status/request ID, idempotency and cancellation (`API.md` §§2–15) | PARTIAL | `backend/app/api/v1/schemas.py`, `backend/app/core/errors.py`, route modules | Client filter tests and selected standardized-error tests exist; full OpenAPI-to-API.md diff and route-by-route error contract suite are NOT RUN. Cancellation is not specified; do not silently extend `failed`. |
+| DATABASE entities, FK/delete rules, state/check/unique/index constraints, JSON shape, ownership, immutability, audit, migration/seed (`DATABASE.md` §§4–14) | PARTIAL | `backend/app/db/models.py`, `0001_initial_schema.py`, audit service, demo seed | `backend/tests/test_postgres_integrity.py`, `test_seed_demo.py`; PostgreSQL test skipped by default. Earlier disposable DB run evidence in Prompt 0; full constraint matrix and hosted Supabase are not run. |
+| DESIGN pages and components: login, dashboard, incident list/detail, reliability, status/source, evaluation, public context (`DESIGN.md` §§6–15) | PARTIAL | `frontend/src/app/router.tsx`, `frontend/src/pages/`, `frontend/src/components/` | Component tests exist for shell/dashboard/incidents/source-admin/setup/context/API client; pages without tests and full visual QA remain NOT RUN. |
+| DESIGN loading/empty/error/unavailable/uncertain/failed/demo states | PARTIAL | Page modules, `StatusBadge`, `SourceAdminPanel`, setup/context components | `SourceAdminPanel.test.tsx`, `SetupStatusPage.test.tsx`, `PublicContextPage.test.tsx`; no complete state-to-screen matrix. |
+| DESIGN keyboard, focus, contrast, semantics, screen readers, reduced motion and responsive criteria (`DESIGN.md` §§16–18) | PARTIAL | `AppShell.tsx`, `AppShell.test.tsx`, `global.css`, `tokens.css` | Shell landmark/skip-link and prior viewport spot-check; comprehensive keyboard/a11y/contrast audit is NOT RUN. |
+| ARCHITECTURE modular monolith, boundaries, video pipeline/model, PostgreSQL/private storage/worker, security/observability/deployment (`ARCHITECTURE.md` §§1–22) | PARTIAL | Backend modules, Compose, storage adapter, DB worker, safety/model docs | Tests in rows above. Live deployment, monitoring, restore/rollback, resources, retention remain unverified. |
+| ARCHITECTURE acceptance criteria (`ARCHITECTURE.md` §23) | PARTIAL | Acceptance rows above and subsystem implementation paths | Existing CI/local suite covers unit and typed checks, not live services, full acceptance journey or operations. |
+| CI and development checks (`.github/workflows/ci.yml`, `Makefile`) | PARTIAL | `Makefile`, CI workflow, `backend/uv.lock`, `frontend/package-lock.json` | Prompt 0 `make check` PASS with 3 backend skips and 16 frontend tests; Actions #40 is green but on older SHA; current remote HEAD has no checks. |
+
+## Prompt 2 — Persistence and storage follow-up
+
+| Requirement | Status | Implementation evidence | Proof / limitation |
+|---|---|---|---|
+| SQLAlchemy model and Alembic migration cover DATABASE.md entities and constraints | PASS (local verification) | `backend/app/db/models.py`; `backend/migrations/versions/0001_initial_schema.py` | Offline upgrade/downgrade generation passed; model and migration table sets matched (16/16). A fresh PostgreSQL 16 migration, `test_postgres_integrity.py`, downgrade to base, re-upgrade, and repeat integrity test all passed on an isolated disposable database with no persistent volume. Hosted Supabase remains unverified. |
+| Migration-only clean database creation; no metadata `create_all` substitute | PASS (static contract) | `backend/migrations/env.py`; `backend/migrations/versions/0001_initial_schema.py` | Revision uses explicit PostgreSQL DDL and `downgrade()` drops dependencies in reverse order. `rg` found no application/test `Base.metadata.create_all()` use. Offline SQL generation passed; database execution remains unverified here. |
+| Distinct prediction, reliability, human review, evaluation, and external-context facts | PARTIAL | Separate SQLAlchemy tables and API/service modules in `backend/app/db/models.py`, `backend/app/api/v1/`, `backend/app/services/` | Structure is present; live data provenance and end-to-end product validation remain partial. |
+| Bounded streaming upload, file validation, OpenCV decode and private storage adapter | PARTIAL | `backend/app/media/uploads.py`, `backend/app/storage/supabase.py`, `backend/app/api/v1/sources.py` | Upload and Supabase adapter mocks pass. Live Supabase private bucket/RLS, deployed authorization, and real storage consistency remain NOT RUN. |
+| Server-generated keys validated before every storage API operation | PASS (mock-tested) | `backend/app/storage/supabase.py` | Prompt 2 added key validation in signed URL path; `backend/tests/test_supabase_storage.py::test_signed_url_rejects_traversal_keys_before_network_call` proves traversal rejection before request. |
+| Evidence access requires backend authorization and short-lived signed URL | PARTIAL | `backend/app/api/v1/evidence.py`; `backend/app/storage/supabase.py` | Route and 120-second URL implementation exist, but live signed-link behavior and actual private bucket policy are NOT RUN. |
+| Orphan inventory and cleanup safe against referenced evidence | PARTIAL | `backend/app/cli/cleanup_orphan_storage.py`, `backend/app/services/storage_cleanup.py`, `docs/supabase-storage.md` | Mock cleanup tests pass. Live inventory/deletion and crash-window consistency are NOT RUN. |
+| Backend-only secrets, configured resource/auth settings, local setup | PARTIAL | `.env.example`, `backend/app/core/config.py`, `README.md`, `docs/supabase-storage.md` | Example has placeholders and frontend config is public-only. Secret scanning cannot establish external deployment configuration; live credentials intentionally absent. |
+| Hosted Supabase Storage integration | BLOCKED / NOT RUN | Supabase adapter configuration and `docs/supabase-storage.md` | No Supabase URL or service-role credential is configured. Private bucket/RLS, deployed ownership checks, signed access, and live orphan cleanup remain unverified; PostgreSQL integration was run separately against an isolated local container. |
+
+## Repository file/folder inventory
+
+Decision is per tracked path listed below. All 128 tracked files are **KEEP**: contracts, tests, migration/model artifacts, lockfiles, workflows and assets have direct authority, execution, import, test, or documentation roles. Searches included Python imports, frontend router imports, tests, package/build scripts, config and docs references; no tracked path is proved junk or genuinely unused. No tracked `.DS_Store`, real `.env`, video/evidence media, Python cache, virtualenv, `node_modules`, `dist`, or generated output was found. No deletion was made.
+
+| Path | Decision |
+|---|---|
+| `.editorconfig` | KEEP |
+| `.env.example` | KEEP |
+| `.github/workflows/ci.yml` | KEEP |
+| `.gitignore` | KEEP |
+| `.prettierignore` | KEEP |
+| `.prettierrc.json` | KEEP |
+| `AGENTS.md` | KEEP |
+| `API.md` | KEEP |
+| `ARCHITECTURE.md` | KEEP |
+| `DATABASE.md` | KEEP |
+| `DESIGN.md` | KEEP |
+| `IMPLEMENTATION_PLAN.md` | KEEP |
+| `Makefile` | KEEP |
+| `PRD.md` | KEEP |
+| `README.md` | KEEP |
+| `backend/.dockerignore` | KEEP |
+| `backend/.python-version` | KEEP |
+| `backend/Dockerfile` | KEEP |
+| `backend/alembic.ini` | KEEP |
+| `backend/app/__init__.py` | KEEP |
+| `backend/app/api/__init__.py` | KEEP |
+| `backend/app/api/v1/__init__.py` | KEEP |
+| `backend/app/api/v1/auth.py` | KEEP |
+| `backend/app/api/v1/dashboard.py` | KEEP |
+| `backend/app/api/v1/evaluations.py` | KEEP |
+| `backend/app/api/v1/evidence.py` | KEEP |
+| `backend/app/api/v1/incidents.py` | KEEP |
+| `backend/app/api/v1/jobs.py` | KEEP |
+| `backend/app/api/v1/public_context.py` | KEEP |
+| `backend/app/api/v1/reliability.py` | KEEP |
+| `backend/app/api/v1/router.py` | KEEP |
+| `backend/app/api/v1/schemas.py` | KEEP |
+| `backend/app/api/v1/sources.py` | KEEP |
+| `backend/app/cli/__init__.py` | KEEP |
+| `backend/app/cli/cleanup_orphan_storage.py` | KEEP |
+| `backend/app/cli/configure_tinyfish.py` | KEEP |
+| `backend/app/cli/download_models.py` | KEEP |
+| `backend/app/cli/seed_demo.py` | KEEP |
+| `backend/app/core/__init__.py` | KEEP |
+| `backend/app/core/config.py` | KEEP |
+| `backend/app/core/errors.py` | KEEP |
+| `backend/app/core/rate_limit.py` | KEEP |
+| `backend/app/db/__init__.py` | KEEP |
+| `backend/app/db/base.py` | KEEP |
+| `backend/app/db/models.py` | KEEP |
+| `backend/app/db/session.py` | KEEP |
+| `backend/app/main.py` | KEEP |
+| `backend/app/media/uploads.py` | KEEP |
+| `backend/app/services/__init__.py` | KEEP |
+| `backend/app/services/audit.py` | KEEP |
+| `backend/app/services/context_jobs.py` | KEEP |
+| `backend/app/services/evaluation_metrics.py` | KEEP |
+| `backend/app/services/incidents.py` | KEEP |
+| `backend/app/services/opencv_models.py` | KEEP |
+| `backend/app/services/storage_cleanup.py` | KEEP |
+| `backend/app/services/tinyfish.py` | KEEP |
+| `backend/app/storage/__init__.py` | KEEP |
+| `backend/app/storage/supabase.py` | KEEP |
+| `backend/app/worker.py` | KEEP |
+| `backend/migrations/env.py` | KEEP |
+| `backend/migrations/script.py.mako` | KEEP |
+| `backend/migrations/versions/0001_initial_schema.py` | KEEP |
+| `backend/pyproject.toml` | KEEP |
+| `backend/tests/test_auth.py` | KEEP |
+| `backend/tests/test_config.py` | KEEP |
+| `backend/tests/test_configure_tinyfish.py` | KEEP |
+| `backend/tests/test_context_jobs.py` | KEEP |
+| `backend/tests/test_evaluation_metrics.py` | KEEP |
+| `backend/tests/test_health.py` | KEEP |
+| `backend/tests/test_opencv_models.py` | KEEP |
+| `backend/tests/test_postgres_integrity.py` | KEEP |
+| `backend/tests/test_rate_limit.py` | KEEP |
+| `backend/tests/test_seed_demo.py` | KEEP |
+| `backend/tests/test_storage_cleanup.py` | KEEP |
+| `backend/tests/test_supabase_storage.py` | KEEP |
+| `backend/tests/test_tinyfish.py` | KEEP |
+| `backend/tests/test_video_uploads.py` | KEEP |
+| `backend/tests/test_worker.py` | KEEP |
+| `backend/uv.lock` | KEEP |
+| `compose.yaml` | KEEP |
+| `docs/FINAL_VERIFICATION.md` | KEEP |
+| `docs/demo-data.md` | KEEP |
+| `docs/implementation-audit.md` | KEEP |
+| `docs/implementation-decisions.md` | KEEP |
+| `docs/implementation-progress.md` | KEEP |
+| `docs/model-artifacts.md` | KEEP |
+| `docs/supabase-storage.md` | KEEP |
+| `docs/threat-model.md` | KEEP |
+| `frontend/eslint.config.js` | KEEP |
+| `frontend/index.html` | KEEP |
+| `frontend/package-lock.json` | KEEP |
+| `frontend/package.json` | KEEP |
+| `frontend/public/favicon.svg` | KEEP |
+| `frontend/src/api/client.test.ts` | KEEP |
+| `frontend/src/api/client.ts` | KEEP |
+| `frontend/src/app/router.tsx` | KEEP |
+| `frontend/src/components/AppShell.test.tsx` | KEEP |
+| `frontend/src/components/AppShell.tsx` | KEEP |
+| `frontend/src/components/PageHeader.tsx` | KEEP |
+| `frontend/src/components/SourceAdminPanel.test.tsx` | KEEP |
+| `frontend/src/components/SourceAdminPanel.tsx` | KEEP |
+| `frontend/src/components/StatusBadge.tsx` | KEEP |
+| `frontend/src/components/Surface.tsx` | KEEP |
+| `frontend/src/main.tsx` | KEEP |
+| `frontend/src/pages/DashboardPage.test.tsx` | KEEP |
+| `frontend/src/pages/DashboardPage.tsx` | KEEP |
+| `frontend/src/pages/EvaluationsPage.tsx` | KEEP |
+| `frontend/src/pages/IncidentDetailPage.tsx` | KEEP |
+| `frontend/src/pages/IncidentsPage.test.tsx` | KEEP |
+| `frontend/src/pages/IncidentsPage.tsx` | KEEP |
+| `frontend/src/pages/LoginPage.tsx` | KEEP |
+| `frontend/src/pages/NotFoundPage.tsx` | KEEP |
+| `frontend/src/pages/PublicContextPage.test.tsx` | KEEP |
+| `frontend/src/pages/PublicContextPage.tsx` | KEEP |
+| `frontend/src/pages/ReliabilityPage.tsx` | KEEP |
+| `frontend/src/pages/SetupStatusPage.test.tsx` | KEEP |
+| `frontend/src/pages/SetupStatusPage.tsx` | KEEP |
+| `frontend/src/pages/SourceContextPage.tsx` | KEEP |
+| `frontend/src/pages/SystemStatusPage.tsx` | KEEP |
+| `frontend/src/styles/global.css` | KEEP |
+| `frontend/src/styles/tokens.css` | KEEP |
+| `frontend/src/test/setup.ts` | KEEP |
+| `frontend/src/vite-env.d.ts` | KEEP |
+| `frontend/tsconfig.app.json` | KEEP |
+| `frontend/tsconfig.json` | KEEP |
+| `frontend/tsconfig.node.json` | KEEP |
+| `frontend/vite.config.ts` | KEEP |
+| `frontend/vitest.config.ts` | KEEP |
+
+Untracked/ignored inventory from `git status --short --ignored`: `backend/.mypy_cache/`, `backend/.pytest_cache/`, `backend/.ruff_cache/`, backend/app and backend/tests `__pycache__/` folders, `backend/.venv/`, `frontend/node_modules/`, and `frontend/dist/` are ignored local generated/dependency outputs. Decision: **REMOVE—PROVEN JUNK** for eventual workspace cleanup, but none were deleted during this audit. No untracked non-ignored files were present. No `.DS_Store`, local `.env`, local video/evidence files, or generated files are tracked. Directories represented by the 128 per-file rows inherit **KEEP**; no whole source/spec/test directory is a cleanup candidate.
+
+## Precise implementation anchors
+
+| Finding | Source location |
+|---|---|
+| API router registration | `backend/app/api/v1/router.py:16-24`; app mounting and middleware/error handlers `backend/app/main.py:35-157` |
+| Sessions, CSRF, role checks and auth endpoints | `backend/app/api/v1/auth.py:130-220`, `:316-343` |
+| Incident list/detail/reviews | `backend/app/api/v1/incidents.py:32-169` |
+| Upload and source processing endpoints | `backend/app/api/v1/sources.py:124-171`, `:221-361`, `:466-471` |
+| Streaming upload size, signatures, OpenCV validation | `backend/app/media/uploads.py:18-118` |
+| Evidence access | `backend/app/api/v1/evidence.py:42-91`; storage signer `backend/app/storage/supabase.py` |
+| Worker claim, quality sample, completion/retry and polling | `backend/app/worker.py:44-358` |
+| PostgreSQL models and constraints | `backend/app/db/models.py:45-589`; initial migration/rollback `backend/migrations/versions/0001_initial_schema.py:15-211` |
+| OpenCV model verification/observations | `backend/app/services/opencv_models.py:117-338`; provenance `docs/model-artifacts.md` |
+| TinyFish provider boundaries | `backend/app/services/tinyfish.py:128-283`; tests `backend/tests/test_tinyfish.py` |
+| Frontend routes | `frontend/src/app/router.tsx:16-34`; page files listed in traceability rows |
+| Required check definitions | `Makefile:24-54`, `.github/workflows/ci.yml:12-72` |
+
+## Exact commands and observed runtime
+
+The repository aggregate target is `make check` (`Makefile:54`). It runs these Make targets in order: `make lint-backend`, `make format-backend-check`, `make typecheck-backend`, `make test-backend`, `make lint-frontend`, `make format-frontend`, `make typecheck-frontend`, `make test-frontend`, `make build-frontend`. Under the hood, backend targets are `cd backend && uv run ruff check app tests migrations`, `uv run ruff format --check app tests migrations`, `uv run mypy app`, `uv run pytest`; frontend targets are `npm --prefix frontend run lint`, `format:check`, `typecheck`, `test:run`, and `build`. CI additionally installs through `uv sync --locked --group dev` and `npm ci --no-audit --no-fund` (`.github/workflows/ci.yml:23-72`).
+
+Observed in the current shell: Node `v24.22.0`, Python `3.14.7`, Docker `29.8.2`, Docker Compose `v5.6.0`; `uv` is **not available on this shell PATH**. Project constraints are Node `>=22.12.0 <23` (`frontend/package.json:6-8`) and Python `>=3.12,<3.13` (`backend/pyproject.toml:1-5`). Prompt 0's aggregate `make check` result was obtained in a separately selected compatible runtime (Node 22.16.0, Python 3.12.14) with committed lockfiles, not with current host-default versions. Prompt 1 did not rerun the checks or start Compose services. Do not treat runtime presence as Docker service verification.
