@@ -112,7 +112,12 @@ Read `AGENTS.md` and all source-of-truth specifications before implementing feat
 
 #OUR DEMO VIDEO:
 
-https://github.com/user-attachments/assets/0b1bc8bf-f2d5-47c7-afe7-50bdc16f3364
+
+
+https://github.com/user-attachments/assets/50d2e493-116f-48e6-b9dd-50ce6fd34e45
+
+
+
 
 
 
