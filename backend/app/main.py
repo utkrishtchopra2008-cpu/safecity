@@ -43,7 +43,10 @@ async def add_request_context(request: Request, call_next: Any) -> Any:
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "same-origin"
-    if request.url.path.startswith(f"{settings.api_prefix}/auth/"):
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.cookie_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    if request.url.path.startswith(f"{settings.api_prefix}/"):
         response.headers["Cache-Control"] = "no-store"
     return response
 

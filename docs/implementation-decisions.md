@@ -58,3 +58,10 @@ The root specifications define a complete product, while this checkout now conta
 ## Cancellation semantics
 
 - API/database contracts do not define a user-visible cancellation state or endpoint. This phase tests Python task interruption cleanup and leaves durable cancellation semantics unchanged; no new endpoint, state, or retention rule is inferred.
+
+## Prompt 4 security decisions
+
+- Preserve the sole API.md FastAPI-managed PostgreSQL session model. No JWT or second identity system is added. Existing roles and route matrix remain authoritative.
+- Apply `Cache-Control: no-store` to all API responses, and add restrictive Permissions-Policy and HSTS when secure-cookie mode is enabled. HSTS is conditional so local HTTP development does not emit an invalid transport policy.
+- Do not infer the API ingress hostname from `PUBLIC_APP_ORIGIN`: the latter is the browser application origin and may differ from the API host. The deployment proxy/gateway must validate Host. Likewise, configure a request-body limit at ingress because Starlette may parse/spool multipart bodies before application staging applies its byte cap; there is no global streaming cap for arbitrary JSON.
+- Existing rate limits are process-local by design per API.md's single-instance MVP. Multi-replica deployments need shared enforcement or trusted-proxy coordination; this phase does not add a new service or invent a distributed limit.

@@ -168,7 +168,7 @@ Use a documented CSRF-token mechanism and appropriate origin validation.
 
 If a CSRF token is returned to the frontend, it must not contain the session token or another reusable authentication secret. Validate the token on protected state-changing requests.
 
-The implementation returns a per-session HMAC CSRF token from `GET /api/v1/auth/csrf`. The frontend sends it in `X-CSRF-Token` for state-changing requests other than login. The backend also requires the request Origin (or Referer origin) to match `PUBLIC_APP_ORIGIN` or `CSRF_ALLOWED_ORIGINS`. Production must configure a random `SESSION_CSRF_SECRET` of at least 32 characters. Authentication responses are sent with `Cache-Control: no-store`.
+The implementation returns a per-session HMAC CSRF token from `GET /api/v1/auth/csrf`. The frontend sends it in `X-CSRF-Token` for state-changing requests other than login. The backend also requires the request Origin (or Referer origin) to match `PUBLIC_APP_ORIGIN` or `CSRF_ALLOWED_ORIGINS`. Production must configure a random `SESSION_CSRF_SECRET` of at least 32 characters. All `/api/v1/` responses are sent with `Cache-Control: no-store`.
 
 Authentication outcomes are written to the append-only audit table with actor (when known), action, object reference, result, timestamp, and request correlation ID. Credentials, emails, session tokens, source IP addresses, and request bodies are not stored in these audit events.
 

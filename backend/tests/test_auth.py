@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app import main as main_module
 from app.api.v1 import incidents as incidents_api
 from app.api.v1 import public_context as public_context_api
 from app.api.v1.auth import COOKIE_NAME, login_limiter
@@ -81,6 +82,47 @@ def test_login_sets_httponly_session_and_never_returns_token(auth_client: TestCl
     assert f"{COOKIE_NAME}=" in cookie
     assert "httponly" in cookie.lower()
     assert "path=/api/v1" in cookie.lower()
+    raw_token = auth_client.cookies.get(COOKIE_NAME)
+    assert raw_token
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    with auth_client.app.state.test_session_factory() as database:
+        saved = database.query(Session).filter_by(token_hash=token_hash).one()
+        assert saved.token_hash != raw_token
+        assert len(saved.token_hash) == 64
+
+
+def test_api_security_headers_and_no_store_are_set(auth_client: TestClient) -> None:
+    response = auth_client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-request-id"]
+
+
+def test_secure_cookie_configuration_emits_secure_cookie_and_hsts(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = AppSettings(
+        app_env="test",
+        public_app_origin="https://testserver",
+        csrf_allowed_origins=["https://testserver"],
+        session_csrf_secret="test-csrf-secret-at-least-32-characters",
+        cookie_secure=True,
+    )
+    monkeypatch.setattr(main_module, "settings", settings)
+    auth_client.app.dependency_overrides[get_settings] = lambda: settings
+    response = auth_client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "https://testserver"},
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+
+    assert response.status_code == 200
+    assert "secure" in response.headers["set-cookie"].lower()
+    assert response.headers["strict-transport-security"] == "max-age=31536000"
 
 
 def test_invalid_credentials_are_generic_and_do_not_issue_cookie(auth_client: TestClient) -> None:
@@ -92,6 +134,18 @@ def test_invalid_credentials_are_generic_and_do_not_issue_cookie(auth_client: Te
     assert response.status_code == 401
     assert response.json()["code"] == "AUTHENTICATION_REQUIRED"
     assert response.json()["detail"] == "Email or password is incorrect."
+    assert "set-cookie" not in response.headers
+
+
+def test_login_rejects_untrusted_browser_origin(auth_client: TestClient) -> None:
+    response = auth_client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "https://attacker.example"},
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "PERMISSION_DENIED"
     assert "set-cookie" not in response.headers
 
 
@@ -115,7 +169,7 @@ def test_logout_requires_csrf_and_revokes_session(auth_client: TestClient) -> No
     assert auth_client.get("/api/v1/auth/me").status_code == 401
 
 
-@pytest.mark.parametrize("invalid_state", ["expired", "revoked"])
+@pytest.mark.parametrize("invalid_state", ["expired", "idle", "revoked", "inactive"])
 def test_expired_or_revoked_session_is_rejected(
     auth_client: TestClient, invalid_state: str
 ) -> None:
@@ -133,6 +187,12 @@ def test_expired_or_revoked_session_is_rejected(
         if invalid_state == "expired":
             record.created_at = datetime(1999, 1, 1, tzinfo=UTC)
             record.expires_at = datetime(2000, 1, 1, tzinfo=UTC)
+        elif invalid_state == "idle":
+            record.last_seen_at = datetime(1999, 1, 1, tzinfo=UTC)
+        elif invalid_state == "inactive":
+            user = database.get(User, record.user_id)
+            assert user is not None
+            user.is_active = False
         else:
             record.revoked_at = datetime.now(UTC)
         database.commit()
@@ -714,3 +774,26 @@ def test_evidence_metadata_and_content_routes_require_authentication(
 
     assert metadata.status_code == 401
     assert content.status_code == 401
+
+
+def test_technical_admin_cannot_access_evidence_without_explicit_grant(
+    auth_client: TestClient,
+) -> None:
+    factory = auth_client.app.state.test_session_factory
+    with factory() as database:
+        user = database.query(User).filter_by(email="operator@example.com").one()
+        user.role = "technical_admin"
+        database.commit()
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "operator@example.com", "password": "correct horse battery staple"},
+    )
+    assert login.status_code == 200
+
+    evidence_id = uuid.uuid4()
+    metadata = auth_client.get(f"/api/v1/evidence/{evidence_id}")
+    content = auth_client.get(f"/api/v1/evidence/{evidence_id}/content")
+
+    assert metadata.status_code == 403
+    assert content.status_code == 403
+    assert metadata.json()["code"] == content.json()["code"] == "PERMISSION_DENIED"

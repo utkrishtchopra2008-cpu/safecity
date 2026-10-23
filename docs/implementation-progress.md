@@ -128,3 +128,29 @@ Prompt 2 local completion gate is met. Exact next phase: **Prompt 3**. Live Supa
 - Event detection remains unimplemented; do not present object output as event evidence. Durable cancellation remains undefined by contract.
 
 Exact next phase: **Prompt 4**.
+
+## Prompt 4 — Authentication, authorization, and security hardening
+
+**Status:** PARTIAL — session, CSRF, route authorization, and security-header controls are implemented and API-tested; deployment-boundary and comprehensive ownership controls remain explicitly incomplete.
+
+### Completed
+
+- Reconfirmed the API.md cookie-session model as the only auth system; no JWT or second identity provider was introduced.
+- Extended API tests for cryptographic session-token hash persistence, idle expiry and inactive-account rejection, untrusted login Origin rejection, protected evidence access by technical administrators, API no-store/security headers, Secure cookies, and conditional HSTS.
+- Applied `Cache-Control: no-store` to all API paths and added a restrictive Permissions-Policy; HSTS is emitted in secure-cookie mode.
+- Updated `API.md`, `docs/threat-model.md`, `docs/implementation-decisions.md`, and the Prompt 4 traceability delta in `docs/implementation-audit.md`.
+
+### Verification
+
+- Backend Ruff lint — **PASS**; Ruff format check — **PASS** (59 files); mypy — **PASS** (42 source files); full pytest — **118 passed, 3 skipped**, one Starlette/httpx deprecation warning.
+- Frontend ESLint, Prettier check, TypeScript, Vitest (**16 passed**) and Vite production build — **PASS**.
+- `make check` was attempted but could not start because `uv` is not on PATH; equivalent backend checks ran from the installed project `.venv`, and frontend package scripts ran directly. No push occurred.
+
+### Remaining blockers and next
+
+- **PARTIAL:** no API Host allowlist or global streamed request-body cap; configure Host validation and body-size limits at the trusted ingress. Starlette may spool multipart content before application staging enforces upload caps.
+- **PARTIAL:** source/tenant ownership rules are not present in the single-institution schema; current route roles and available job/evaluation ownership checks are tested only in selected paths.
+- **NOT RUN/BLOCKED:** cross-replica rate limiting, live Supabase RLS/storage checks, automated repository secret scanning, and external penetration/security review.
+- No MFA, recovery, cancellation, deletion, or retention behavior was invented. Retention remains non-destructive/configurable.
+
+Prompt 4 implementation and local targeted verification are complete at the available boundary. Exact next phase: **Prompt 5**.
