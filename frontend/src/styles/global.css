@@ -460,6 +460,64 @@ pre {
   min-height: 96px;
 }
 
+.incident-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  align-items: end;
+  gap: var(--space-4);
+}
+
+.incident-filters label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+}
+
+.incident-filters input,
+.incident-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+.field-help {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+}
+
+.incident-filter-actions,
+.incident-pagination-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.incident-filters .button,
+.incident-pagination .button {
+  min-height: 44px;
+}
+
+.incident-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.incident-pagination-actions {
+  justify-content: flex-end;
+}
+
 .context-search-form {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(200px, 0.6fr) auto;
@@ -816,6 +874,11 @@ th {
   .detail-grid,
   .context-search-form {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .incident-pagination {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

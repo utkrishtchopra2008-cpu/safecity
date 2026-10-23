@@ -1,6 +1,6 @@
 # Implementation audit and traceability
 
-Audit refreshed against the implementation tree published at `485c84c`, including this turn's review-contract test update, on 2026-10-23. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` was excluded as instructed. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
+Audit refreshed against the implementation tree published at `4d43bb0`, including this turn's incident-list filters and paging, on 2026-10-23. Product requirements come from `PRD.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `DESIGN.md`, and `IMPLEMENTATION_PLAN.md`; `README.md` was excluded as instructed. The repository has implemented several core workflows but remains partial against the product contracts. “NOT PRESENT” means no implementation was found in the inspected tree; it does not imply an unsafe runtime defect.
 
 ## Repository and environment
 
@@ -15,7 +15,7 @@ Audit refreshed against the implementation tree published at `485c84c`, includin
 | Compose | PARTIAL | `compose.yaml` defines PostgreSQL, backend, and a single worker service. Worker health reporting and full container startup were not verified. |
 | Environment | PARTIAL | `.env.example` now includes backend-only Supabase Storage placeholders and upload byte/duration limits; actual credentials and deployment policy are unavailable. |
 | Runtime | PARTIAL | Backend checks ran with Python 3.12.15 and `uv.lock`. Local Node is 24.22.0 (outside the project's 22.x engine range); CI uses Node 22.16.0. |
-| Automated tests | PARTIAL | Current backend: 97 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 12 Vitest tests passed, including the global shell navigation landmark and skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
+| Automated tests | PARTIAL | Current backend: 102 passed, 1 PostgreSQL integration test skipped without `SAFECITY_TEST_DATABASE_URL`. Frontend: 14 Vitest tests passed, including incident-list filter encoding/page transitions and the global shell navigation landmark/skip-link contract. These checks do not establish live Supabase/TinyFish behavior or full PRD acceptance. |
 
 ## Risk-ranked gap register
 
@@ -90,7 +90,7 @@ Statuses below describe implemented proof, not a claim that the entire parent re
 |---|---|---|
 | API auth: login/logout/current user | PARTIAL | `backend/app/api/v1/auth.py`, `backend/app/api/v1/schemas.py`; `backend/tests/test_auth.py`; compare all response/error branches with `API.md` contract tests. |
 | API dashboard | PARTIAL | `backend/app/api/v1/dashboard.py`; route registered in `backend/app/api/v1/router.py`; route-specific contract test coverage is incomplete. |
-| API incidents list/detail/review | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; `backend/tests/test_auth.py`; complete pagination/filter/role contract matrix remains. |
+| API incidents list/detail/review | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; `backend/tests/test_auth.py`, `frontend/src/pages/IncidentsPage.test.tsx`; frontend request encoding/page transitions are covered, while backend result filtering, detail provenance, and role matrix remain. |
 | API evidence metadata/content | PARTIAL | `backend/app/api/v1/evidence.py`; `backend/tests/test_auth.py`, `backend/tests/test_supabase_storage.py`; live playback and storage policy checks remain. |
 | API sources register/upload/detail/reprocess/context | PARTIAL | `backend/app/api/v1/sources.py`; `backend/tests/test_video_uploads.py`, `backend/tests/test_context_jobs.py`; comprehensive typed response tests and live storage remain. |
 | API jobs/status/health | PARTIAL | `backend/app/api/v1/jobs.py`, `backend/app/main.py`, `backend/app/worker.py`; `backend/tests/test_worker.py`, `backend/tests/test_health.py`; no cancel endpoint/state is specified in `API.md`, so none was invented. |
@@ -100,7 +100,7 @@ Statuses below describe implemented proof, not a claim that the entire parent re
 | `POST /api/v1/auth/logout` | PARTIAL | `backend/app/api/v1/auth.py`; `backend/tests/test_auth.py` CSRF and revocation; tested. |
 | `GET /api/v1/auth/me` and `GET /api/v1/auth/csrf` | PARTIAL | `backend/app/api/v1/auth.py`; `backend/tests/test_auth.py` expiry/revocation/CSRF; tested. |
 | `GET /api/v1/dashboard/summary` | PARTIAL | `backend/app/api/v1/dashboard.py`; current test verifies auth gate only; response aggregation/range validation contract tests remain. |
-| `GET /api/v1/incidents` | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; current test verifies auth gate; list filtering/paging response tests remain. |
+| `GET /api/v1/incidents` | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`, `frontend/src/pages/IncidentsPage.tsx`; `frontend/src/pages/IncidentsPage.test.tsx` verifies query encoding and page transitions; backend filtered-result/paging response tests remain. |
 | `GET /api/v1/incidents/{incident_id}` | PARTIAL | `backend/app/api/v1/incidents.py`; current test suite lacks full detail/provenance response contract assertions. |
 | `POST /api/v1/incidents/{incident_id}/reviews` | PARTIAL | `backend/app/api/v1/incidents.py`, `backend/app/services/incidents.py`; `backend/tests/test_auth.py` verifies typed success, allowed outcome/note, and server-derived reviewer identity; transactional persistence, duplicate conflict, and rollback still need PostgreSQL route tests. |
 | `GET /api/v1/incidents/{incident_id}/reviews` | PARTIAL | `backend/app/api/v1/incidents.py` implements authenticated review-history retrieval; `backend/tests/test_auth.py` now verifies the typed history response. Resource-scope authorization and database-backed route coverage remain limited by the absence of a membership model. |
@@ -153,7 +153,7 @@ Highest-value next local work is end-to-end route/state coverage that never impe
 | Criterion | Status | Evidence / remaining proof |
 |---|---|---|
 | Shared shell, typography, spacing, color tokens; evidence-first presentation | PARTIAL | `frontend/src/components/AppShell.tsx`, `frontend/src/components/AppShell.test.tsx`, `frontend/src/styles/tokens.css`, `global.css`; tablet/mobile header screenshots were checked after the responsive fix, but page-wide visual review remains incomplete. |
-| Scannable incident table with specified filters | PARTIAL | `frontend/src/pages/IncidentsPage.tsx`; route/UI tests do not establish full pagination/filter coverage. |
+| Scannable incident table with specified filters | PARTIAL | `frontend/src/pages/IncidentsPage.tsx` provides date, source, category, review-status, sort, page-size, and previous/next controls; `frontend/src/pages/IncidentsPage.test.tsx` verifies request encoding, invalid date order, and page transitions. Full keyboard and visual review remains incomplete. |
 | Detail separates detector output, review and evidence; missing/uncertain explicit | PARTIAL | `frontend/src/pages/IncidentDetailPage.tsx`; component-level accessibility/state proof incomplete. |
 | Reliability metrics show context and qualified availability | PARTIAL | `frontend/src/pages/ReliabilityPage.tsx`, backend reliability API; no full screenshot review. |
 | Loading, empty, error, failed, unavailable, uncertain states consistent | PARTIAL | Page/components; `SourceAdminPanel.test.tsx`, `SetupStatusPage.test.tsx`, `PublicContextPage.test.tsx`; many page-state transitions remain untested. |

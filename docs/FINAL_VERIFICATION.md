@@ -12,7 +12,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | Backend pytest | 102 passed, 1 skipped (PostgreSQL integration test requires `SAFECITY_TEST_DATABASE_URL`). One Starlette TestClient deprecation warning remains. |
 | Locked installs | `uv sync --locked --group dev` and `uv lock --check` passed with Python 3.12.15. `npm ci` passed from `frontend/package-lock.json`; local Node 24.22.0 emitted the expected engine-range warning because the project specifies Node 22.x. |
 | PostgreSQL | A disposable PostgreSQL run earlier in this work session exercised migration downgrade/upgrade, schema checks, duplicate-ingestion conflict, rollback, and append-only audit trigger. This was not a live Supabase project. |
-| Frontend lint/typecheck/unit tests/build | Passed; 12 Vitest tests, including the AppShell skip-link/navigation contract and inert rendering of HTML-like TinyFish text. |
+| Frontend lint/typecheck/unit tests/build | Passed; 14 Vitest tests, including incident filter/query encoding and pagination, the AppShell skip-link/navigation contract, and inert rendering of HTML-like TinyFish text. |
 | Frontend format check | Passed. |
 | OpenAPI route catalogue | Loaded successfully with 25 paths; only a subset of `API.md` endpoints exists. |
 | Docker Compose | `docker compose config -q` passed. No full multi-service app/worker deployment was verified. |
@@ -21,7 +21,7 @@ This repository contains a partial SafeCity implementation. It is not production
 | TinyFish | Search/Fetch request handling, URL boundaries and provider failures passed mocked tests; source-level refresh passed SQLite persistence/deduplication and disabled-provider tests. No live request or PostgreSQL queue integration was run; no key is configured. |
 | Visual and accessibility review | Partial manual review: login and protected-route error states were inspected in the browser; responsive header checked at 1024 px and 390 px, with no horizontal overflow at 390 px. Full-page screenshot and keyboard/contrast audit remains NOT RUN. |
 
-The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, inert external-content rendering, job owner isolation/diagnostic redaction and role-specific status, and typed incident-review submission/history with server-derived reviewer identity. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on the previously published commit `485c84c`; this verification-only test addition still needs its CI run.
+The latest local regression run also covers rejection of expired/revoked sessions, client filename path traversal, deterministic demo-seed idempotency/production guard, configured per-instance source/evaluation rate limits, inert external-content rendering, job owner isolation/diagnostic redaction and role-specific status, typed incident-review submission/history with server-derived reviewer identity, and incident filter encoding/page navigation. `docs/threat-model.md` maps controls, tests, and remaining limits. GitHub Actions backend and frontend checks passed on the previously published commit `4d43bb0`; this incident-list implementation still needs its CI run.
 
 ## Operational constraints and remaining requirements
 
