@@ -107,3 +107,12 @@ make check
 ## Contribution discipline
 
 Read `AGENTS.md` and all source-of-truth specifications before implementing features. Keep changes focused, update contract documents when behavior changes, and report commands/tests that could not run rather than claiming success.
+
+
+
+#OUR DEMO VIDEO:
+
+https://github.com/user-attachments/assets/0b1bc8bf-f2d5-47c7-afe7-50bdc16f3364
+
+
+
